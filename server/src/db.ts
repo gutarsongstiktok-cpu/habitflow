@@ -83,3 +83,8 @@ export async function updateUserData(id: string, data: AppData) {
   );
   return result.rows[0] ?? null;
 }
+
+export async function listUsers() {
+  const result = await pool.query(`SELECT id, telegram_id, app_data FROM uphabit.users`);
+  return result.rows;
+}
