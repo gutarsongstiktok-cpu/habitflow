@@ -82,11 +82,47 @@ export const useStore = create<HabitFlowStore>((set, get) => ({
   hydrated: false,
 
   hydrate: async () => {
-    const data = (await loadCloud()) ?? loadLocal();
-    if (data) set({ ...data, hydrated: true });
-    else set({ hydrated: true });
-  },
+  try {
+    const cloudPromise = loadCloud();
 
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), 1500);
+    });
+
+    const cloudData = await Promise.race([
+      cloudPromise,
+      timeoutPromise
+    ]);
+
+    const data = cloudData ?? loadLocal();
+
+    if (data) {
+      set({
+        ...data,
+        hydrated: true
+      });
+    } else {
+      set({
+        hydrated: true
+      });
+    }
+  } catch (error) {
+    console.warn("Storage hydration failed, using local/default data:", error);
+
+    const localData = loadLocal();
+
+    if (localData) {
+      set({
+        ...localData,
+        hydrated: true
+      });
+    } else {
+      set({
+        hydrated: true
+      });
+    }
+  }
+},
   patch: (value) => {
     set(value);
     persist(get);
