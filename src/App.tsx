@@ -1,684 +1,118 @@
 import { useMemo, useState } from "react";
 import {
-  BarChart3, CheckSquare, Plus, Settings, Sparkles,
-  Target, Trash2, WalletCards, X, type LucideIcon
+  BarChart3, Check, CheckSquare, ChevronLeft, ChevronRight, Download, Edit3,
+  Plus, Settings, Sparkles, Target, Trash2, WalletCards, X, TrendingUp,
+  TrendingDown, PiggyBank, CalendarDays, Bell, Moon, Sun, RotateCcw
 } from "lucide-react";
 import {
-  format, isFuture, parseISO, addDays, startOfMonth, endOfMonth,
-  eachDayOfInterval, isSameMonth
+  addMonths, eachDayOfInterval, endOfMonth, format, isSameDay, isSameMonth,
+  isToday, parseISO, startOfMonth, subMonths
 } from "date-fns";
 import { ru } from "date-fns/locale";
-import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useStore } from "./store";
-import type { Priority, TransactionType } from "./types";
+import type { Habit, Priority, RepeatRule, TransactionType } from "./types";
 
-type Tab = "habits" | "tasks" | "finance" | "analytics" | "profile";
+type Tab="habits"|"tasks"|"finance"|"analytics"|"profile";
+const today=()=>format(new Date(),"yyyy-MM-dd");
+const money=(n:number)=>new Intl.NumberFormat("ru-RU",{maximumFractionDigits:2}).format(n);
 
-const today = () => format(new Date(), "yyyy-MM-dd");
-const money = (value: number) =>
-  new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value);
-
-function Modal({
-  title,
-  onClose,
-  children
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center">
-      <div className="card w-full max-w-lg max-h-[90vh] overflow-auto p-5">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose} aria-label="Закрыть"><X /></button>
-        </div>
-        {children}
-      </div>
+function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}){
+  return <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 p-3 sm:items-center">
+    <div className="card max-h-[92vh] w-full max-w-xl overflow-y-auto p-5 shadow-2xl">
+      <div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-black">{title}</h2><button onClick={onClose}><X/></button></div>{children}
     </div>
-  );
+  </div>
+}
+function Field({label,children}:{label:string;children:React.ReactNode}){return <label className="mb-3 block"><span className="muted text-sm">{label}</span>{children}</label>}
+function Input(p:React.InputHTMLAttributes<HTMLInputElement>){return <input {...p} className="mt-1 w-full rounded-xl border-0 p-3 outline-none" />}
+function Select(p:React.SelectHTMLAttributes<HTMLSelectElement>){return <select {...p} className="mt-1 w-full rounded-xl border-0 p-3 outline-none"/>}
+function Page({title,action,children}:{title:string;action?:React.ReactNode;children:React.ReactNode}){
+  return <main className="safe-bottom mx-auto max-w-2xl px-4 pt-5"><header className="mb-5 flex items-center justify-between"><h1 className="text-2xl font-black">{title}</h1>{action}</header>{children}</main>
+}
+function Pill({children}:{children:React.ReactNode}){return <span className="rounded-full bg-black/5 px-2.5 py-1 text-xs dark:bg-white/10">{children}</span>}
+function calcStreak(ds:string[]){const s=new Set(ds);let n=0,d=new Date();while(s.has(format(d,"yyyy-MM-dd"))){n++;d.setDate(d.getDate()-1)}return n}
+function bestStreak(ds:string[]){if(!ds.length)return 0;const a=[...new Set(ds)].sort();let best=1,cur=1;for(let i=1;i<a.length;i++){const d1=new Date(a[i-1]+"T00:00:00"),d2=new Date(a[i]+"T00:00:00");if((d2.getTime()-d1.getTime())===86400000){cur++;best=Math.max(best,cur)}else cur=1}return best}
+
+function Habits(){
+  const {habits,addHabit,updateHabit,toggleHabit,removeHabit}=useStore();
+  const [open,setOpen]=useState(false),[edit,setEdit]=useState<Habit|null>(null),[month,setMonth]=useState(new Date());
+  const [name,setName]=useState(""),[cat,setCat]=useState("Личное"),[color,setColor]=useState("#2481cc"),[reminder,setReminder]=useState("");
+  const done=habits.filter(h=>h.completions.includes(today())).length, pct=habits.length?Math.round(done/habits.length*100):0;
+  const days=eachDayOfInterval({start:startOfMonth(month),end:endOfMonth(month)});
+  const openEdit=(h?:Habit)=>{if(h){setEdit(h);setName(h.name);setCat(h.category);setColor(h.color);setReminder(h.reminder??"")}else{setEdit(null);setName("");setCat("Личное");setColor("#2481cc");setReminder("")}setOpen(true)};
+  const save=()=>{if(!name.trim())return;const v={name:name.trim(),category:cat.trim()||"Личное",color,reminder:reminder||undefined};edit?updateHabit(edit.id,v):addHabit(v);setOpen(false)};
+  return <Page title="Привычки" action={<button className="primary rounded-full p-3" onClick={()=>openEdit()}><Plus/></button>}>
+    <div className="card mb-4 p-5"><div className="flex justify-between"><div><div className="muted">Сегодня</div><div className="text-3xl font-black">{done}/{habits.length}</div></div><div className="text-right"><div className="muted">Выполнение</div><div className="text-2xl font-black">{pct}%</div></div></div><div className="mt-4 h-2 rounded-full bg-black/10"><div className="primary h-2 rounded-full transition-all" style={{width:`${pct}%`}}/></div></div>
+    <div className="mb-3 flex items-center justify-between"><button onClick={()=>setMonth(subMonths(month,1))}><ChevronLeft/></button><b>{format(month,"LLLL yyyy",{locale:ru})}</b><button onClick={()=>setMonth(addMonths(month,1))}><ChevronRight/></button></div>
+    <div className="mb-4 grid grid-cols-7 gap-1 text-center text-xs">{["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map(x=><span className="muted" key={x}>{x}</span>)}{Array.from({length:(startOfMonth(month).getDay()+6)%7}).map((_,i)=><span key={"e"+i}/>)}{days.map(d=><span key={d.toISOString()} className={`rounded-lg p-1 ${isToday(d)?"primary font-bold":""}`}>{format(d,"d")}</span>)}</div>
+    <div className="space-y-3">{habits.map(h=>{const d=h.completions.includes(today()),st=calcStreak(h.completions);return <div className="card p-4" key={h.id}><div className="flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center rounded-2xl text-white" style={{background:h.color}}><Target size={21}/></div><div className="min-w-0 flex-1"><div className="truncate font-bold">{h.name}</div><div className="muted text-sm">{h.category} · 🔥 {st} · рекорд {bestStreak(h.completions)}</div></div><button onClick={()=>toggleHabit(h.id)} className={`rounded-xl px-3 py-2 font-bold ${d?"bg-green-500 text-white":"bg-black/5 dark:bg-white/10"}`}>{d?<Check/>:"Сегодня"}</button></div><div className="mt-3 flex gap-2"><button className="muted flex items-center gap-1 text-sm" onClick={()=>openEdit(h)}><Edit3 size={15}/> Изменить</button><button className="muted flex items-center gap-1 text-sm" onClick={()=>removeHabit(h.id)}><Trash2 size={15}/> Удалить</button>{h.reminder&&<Pill>⏰ {h.reminder}</Pill>}</div></div>})}</div>
+    {open&&<Modal title={edit?"Изменить привычку":"Новая привычка"} onClose={()=>setOpen(false)}><Field label="Название"><Input value={name} onChange={e=>setName(e.target.value)} placeholder="Например, читать 20 минут"/></Field><Field label="Категория"><Input value={cat} onChange={e=>setCat(e.target.value)}/></Field><Field label="Напоминание"><Input type="time" value={reminder} onChange={e=>setReminder(e.target.value)}/></Field><Field label="Цвет"><Input type="color" value={color} onChange={e=>setColor(e.target.value)} className="h-12"/></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={save}>{edit?"Сохранить":"Создать"}</button></Modal>}
+  </Page>
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="mb-3 block">
-      <span className="text-sm muted">{label}</span>
-      {children}
-    </label>
-  );
+function Tasks(){
+  const {tasks,addTask,toggleTask,removeTask}=useStore();const [open,setOpen]=useState(false),[filter,setFilter]=useState("all"),[title,setTitle]=useState(""),[priority,setPriority]=useState<Priority>("medium"),[due,setDue]=useState(today()),[repeat,setRepeat]=useState<RepeatRule>("none");
+  const visible=tasks.filter(t=>filter==="done"?t.completed:filter==="today"?t.dueDate===today()&&!t.completed:filter==="overdue"?!!t.dueDate&&t.dueDate<today()&&!t.completed:true);
+  const add=()=>{if(!title.trim())return;addTask({title:title.trim(),priority,dueDate:due||undefined,repeat});setTitle("");setOpen(false)};
+  const label=(p:Priority)=>p==="high"?"Высокий":p==="low"?"Низкий":"Средний";
+  return <Page title="Задачи" action={<button className="primary rounded-full p-3" onClick={()=>setOpen(true)}><Plus/></button>}>
+    <div className="mb-4 flex gap-2 overflow-x-auto">{[["all","Все"],["today","Сегодня"],["overdue","Просрочены"],["done","Готово"]].map(([v,l])=><button key={v} onClick={()=>setFilter(v)} className={`whitespace-nowrap rounded-full px-3 py-2 text-sm ${filter===v?"primary":"bg-black/5 dark:bg-white/10"}`}>{l}</button>)}</div>
+    <div className="mb-4 grid grid-cols-3 gap-2"><div className="card p-3"><div className="muted text-xs">Всего</div><b className="text-xl">{tasks.length}</b></div><div className="card p-3"><div className="muted text-xs">Открыто</div><b className="text-xl">{tasks.filter(t=>!t.completed).length}</b></div><div className="card p-3"><div className="muted text-xs">Готово</div><b className="text-xl">{tasks.filter(t=>t.completed).length}</b></div></div>
+    <div className="space-y-3">{visible.map(t=><div className={`card flex items-center gap-3 p-4 ${t.completed?"opacity-60":""}`} key={t.id}><button onClick={()=>toggleTask(t.id)} className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${t.completed?"bg-green-500 text-white":""}`}>{t.completed&&<Check size={16}/>}</button><div className="min-w-0 flex-1"><div className={`font-semibold ${t.completed?"line-through":""}`}>{t.title}</div><div className="mt-1 flex flex-wrap gap-2"><Pill>{label(t.priority)}</Pill>{t.dueDate&&<Pill>📅 {t.dueDate}</Pill>}{t.repeat!=="none"&&<Pill>↻ {t.repeat}</Pill>}</div></div><button className="muted" onClick={()=>removeTask(t.id)}><Trash2 size={17}/></button></div>)}</div>
+    {open&&<Modal title="Новая задача" onClose={()=>setOpen(false)}><Field label="Название"><Input autoFocus value={title} onChange={e=>setTitle(e.target.value)} placeholder="Что нужно сделать?"/></Field><Field label="Приоритет"><Select value={priority} onChange={e=>setPriority(e.target.value as Priority)}><option value="high">Высокий</option><option value="medium">Средний</option><option value="low">Низкий</option></Select></Field><Field label="Дедлайн"><Input type="date" value={due} onChange={e=>setDue(e.target.value)}/></Field><Field label="Повтор"><Select value={repeat} onChange={e=>setRepeat(e.target.value as RepeatRule)}><option value="none">Без повтора</option><option value="daily">Каждый день</option><option value="weekly">Каждую неделю</option><option value="monthly">Каждый месяц</option></Select></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={add}>Добавить</button></Modal>}
+  </Page>
 }
 
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className="mt-1 w-full rounded-xl border-0 bg-black/5 p-3 outline-none dark:bg-white/10"
-    />
-  );
+function Finance(){
+  const {wallets,categories,transactions,addTransaction,removeTransaction,addWallet,addCategory,budgets,addBudget,removeBudget,goals,addGoal,updateGoal,removeGoal}=useStore();
+  const [open,setOpen]=useState<"tx"|"wallet"|"cat"|"budget"|"goal"|null>(null);const [type,setType]=useState<TransactionType>("expense"),[amount,setAmount]=useState(""),[cat,setCat]=useState(categories.find(c=>c.type==="expense")?.id??""),[wallet,setWallet]=useState(wallets[0]?.id??""),[comment,setComment]=useState(""),[date,setDate]=useState(today());
+  const [wname,setWname]=useState(""),[cname,setCname]=useState(""),[cType,setCType]=useState<TransactionType>("expense"),[bLimit,setBLimit]=useState(""),[bCat,setBCat]=useState(categories.find(c=>c.type==="expense")?.id??""),[goalName,setGoalName]=useState(""),[goalTarget,setGoalTarget]=useState("");
+  const income=transactions.filter(t=>t.type==="income").reduce((a,b)=>a+b.amount,0),expense=transactions.filter(t=>t.type==="expense").reduce((a,b)=>a+b.amount,0),balance=wallets.reduce((a,b)=>a+b.balance,0);
+  const addTx=()=>{const n=Number(amount);if(!n||!wallet)return;addTransaction({type,amount:n,categoryId:cat,walletId:wallet,comment,date});setAmount("");setComment("");setOpen(null)};
+  const expenseCats=categories.filter(c=>c.type==="expense");
+  return <Page title="Финансы" action={<button className="primary rounded-full p-3" onClick={()=>setOpen("tx")}><Plus/></button>}>
+    <div className="grid grid-cols-2 gap-3"><div className="card p-4"><div className="muted text-sm">Баланс</div><div className="text-2xl font-black">{money(balance)} ₽</div></div><div className="card p-4"><div className="muted text-sm">Расходы</div><div className="text-2xl font-black">{money(expense)} ₽</div></div></div>
+    <div className="mt-3 grid grid-cols-2 gap-3"><div className="card p-4"><div className="muted text-sm">Доходы</div><div className="flex items-center gap-2 text-lg font-bold"><TrendingUp size={18}/> {money(income)} ₽</div></div><div className="card p-4"><div className="muted text-sm">Операций</div><div className="text-lg font-bold">{transactions.length}</div></div></div>
+    <div className="mt-5 flex gap-2 overflow-x-auto"><button className="rounded-full bg-black/5 px-3 py-2 text-sm dark:bg-white/10" onClick={()=>setOpen("wallet")}>+ Кошелёк</button><button className="rounded-full bg-black/5 px-3 py-2 text-sm dark:bg-white/10" onClick={()=>setOpen("cat")}>+ Категория</button><button className="rounded-full bg-black/5 px-3 py-2 text-sm dark:bg-white/10" onClick={()=>setOpen("budget")}>+ Бюджет</button><button className="rounded-full bg-black/5 px-3 py-2 text-sm dark:bg-white/10" onClick={()=>setOpen("goal")}>+ Цель</button></div>
+    <h3 className="mb-2 mt-6 font-black">Кошельки</h3><div className="space-y-2">{wallets.map(w=><div className="card flex justify-between p-4" key={w.id}><span>{w.name}</span><b>{money(w.balance)} {w.currency}</b></div>)}</div>
+    <h3 className="mb-2 mt-6 font-black">Последние операции</h3><div className="space-y-2">{[...transactions].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10).map(t=><div className="card flex items-center gap-3 p-4" key={t.id}><div className="flex-1"><b>{categories.find(c=>c.id===t.categoryId)?.name??"Категория"}</b><div className="muted text-xs">{t.date}{t.comment?` · ${t.comment}`:""}</div></div><b className={t.type==="income"?"text-green-600":"text-red-500"}>{t.type==="income"?"+":"-"}{money(t.amount)} ₽</b><button className="muted" onClick={()=>removeTransaction(t.id)}><Trash2 size={16}/></button></div>)}</div>
+    <h3 className="mb-2 mt-6 font-black">Бюджеты</h3>{budgets.length?budgets.map(b=>{const spent=transactions.filter(t=>t.type==="expense"&&t.categoryId===b.categoryId&&t.date.slice(0,7)===b.month).reduce((a,x)=>a+x.amount,0);const p=Math.min(100,Math.round(spent/b.limit*100));return <div className="card mb-2 p-4" key={b.id}><div className="flex justify-between"><b>{categories.find(c=>c.id===b.categoryId)?.name}</b><span>{money(spent)} / {money(b.limit)} ₽</span></div><div className="mt-2 h-2 rounded bg-black/10"><div className="primary h-2 rounded" style={{width:`${p}%`}}/></div><button className="muted mt-2 text-xs" onClick={()=>removeBudget(b.id)}>Удалить</button></div>}):<div className="muted text-sm">Бюджетов пока нет.</div>}
+    <h3 className="mb-2 mt-6 font-black">Цели накопления</h3>{goals.length?goals.map(g=>{const p=Math.min(100,Math.round(g.saved/g.target*100));return <div className="card mb-2 p-4" key={g.id}><div className="flex justify-between"><b>{g.name}</b><span>{p}%</span></div><div className="muted text-sm">{money(g.saved)} / {money(g.target)} ₽</div><div className="mt-2 h-2 rounded bg-black/10"><div className="primary h-2 rounded" style={{width:`${p}%`}}/></div><div className="mt-2 flex gap-3 text-xs"><button className="muted" onClick={()=>updateGoal(g.id,{saved:Math.min(g.target,g.saved+100)})}>+100</button><button className="muted" onClick={()=>removeGoal(g.id)}>Удалить</button></div></div>}):<div className="muted text-sm">Целей пока нет.</div>}
+    {open==="tx"&&<Modal title="Новая операция" onClose={()=>setOpen(null)}><div className="mb-3 grid grid-cols-2 gap-2"><button className={`rounded-xl p-3 ${type==="expense"?"primary": "bg-black/5 dark:bg-white/10"}`} onClick={()=>{setType("expense");setCat(expenseCats[0]?.id??"")}}>Расход</button><button className={`rounded-xl p-3 ${type==="income"?"primary": "bg-black/5 dark:bg-white/10"}`} onClick={()=>{setType("income");setCat(categories.find(c=>c.type==="income")?.id??"")}}>Доход</button></div><Field label="Сумма"><Input type="number" inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0"/></Field><Field label="Категория"><Select value={cat} onChange={e=>setCat(e.target.value)}>{categories.filter(c=>c.type===type).map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</Select></Field><Field label="Кошелёк"><Select value={wallet} onChange={e=>setWallet(e.target.value)}>{wallets.map(w=><option value={w.id} key={w.id}>{w.name}</option>)}</Select></Field><Field label="Дата"><Input type="date" value={date} onChange={e=>setDate(e.target.value)}/></Field><Field label="Комментарий"><Input value={comment} onChange={e=>setComment(e.target.value)}/></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={addTx}>Сохранить</button></Modal>}
+    {open==="wallet"&&<Modal title="Новый кошелёк" onClose={()=>setOpen(null)}><Field label="Название"><Input value={wname} onChange={e=>setWname(e.target.value)} placeholder="Наличные"/></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={()=>{if(wname.trim()){addWallet({name:wname.trim(),balance:0,currency:"₽"});setWname("");setOpen(null)}}}>Создать</button></Modal>}
+    {open==="cat"&&<Modal title="Новая категория" onClose={()=>setOpen(null)}><Field label="Название"><Input value={cname} onChange={e=>setCname(e.target.value)}/></Field><Field label="Тип"><Select value={cType} onChange={e=>setCType(e.target.value as TransactionType)}><option value="expense">Расход</option><option value="income">Доход</option></Select></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={()=>{if(cname.trim()){addCategory({name:cname.trim(),type:cType,color:"#2481cc"});setCname("");setOpen(null)}}}>Создать</button></Modal>}
+    {open==="budget"&&<Modal title="Новый бюджет" onClose={()=>setOpen(null)}><Field label="Категория"><Select value={bCat} onChange={e=>setBCat(e.target.value)}>{expenseCats.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</Select></Field><Field label="Лимит на месяц"><Input type="number" value={bLimit} onChange={e=>setBLimit(e.target.value)}/></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={()=>{if(Number(bLimit)&&bCat){addBudget({categoryId:bCat,month:today().slice(0,7),limit:Number(bLimit)});setBLimit("");setOpen(null)}}}>Создать</button></Modal>}
+    {open==="goal"&&<Modal title="Цель накопления" onClose={()=>setOpen(null)}><Field label="Название"><Input value={goalName} onChange={e=>setGoalName(e.target.value)} placeholder="Новый телефон"/></Field><Field label="Цель"><Input type="number" value={goalTarget} onChange={e=>setGoalTarget(e.target.value)} placeholder="0"/></Field><button className="primary w-full rounded-xl p-3 font-bold" onClick={()=>{if(goalName.trim()&&Number(goalTarget)){addGoal({name:goalName.trim(),target:Number(goalTarget),saved:0});setGoalName("");setGoalTarget("");setOpen(null)}}}>Создать</button></Modal>}
+  </Page>
 }
 
-function Page({
-  title,
-  action,
-  children
-}: {
-  title: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <main className="safe-bottom mx-auto max-w-2xl px-4 pt-5">
-      <header className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl font-black">{title}</h1>
-        {action}
-      </header>
-      {children}
-    </main>
-  );
+function Analytics(){
+  const {habits,tasks,transactions,categories,goals}=useStore();const inc=transactions.filter(t=>t.type==="income").reduce((a,b)=>a+b.amount,0),exp=transactions.filter(t=>t.type==="expense").reduce((a,b)=>a+b.amount,0);
+  const data=categories.filter(c=>c.type==="expense").map(c=>({name:c.name,value:transactions.filter(t=>t.type==="expense"&&t.categoryId===c.id).reduce((a,b)=>a+b.amount,0)})).filter(x=>x.value>0);
+  const done=habits.reduce((a,h)=>a+h.completions.length,0), streak=habits.length?Math.max(...habits.map(h=>calcStreak(h.completions))):0, taskPct=tasks.length?Math.round(tasks.filter(t=>t.completed).length/tasks.length*100):0;
+  return <Page title="Аналитика"><div className="grid grid-cols-2 gap-3"><div className="card p-4"><div className="muted text-sm">🔥 Лучший streak</div><b className="text-2xl">{streak} дн.</b></div><div className="card p-4"><div className="muted text-sm">✓ Задачи</div><b className="text-2xl">{taskPct}%</b></div><div className="card p-4"><div className="muted text-sm">Доходы</div><b className="text-xl">{money(inc)} ₽</b></div><div className="card p-4"><div className="muted text-sm">Расходы</div><b className="text-xl">{money(exp)} ₽</b></div></div>
+    <div className="card mt-4 p-4"><h3 className="font-black">Расходы по категориям</h3>{data.length?<div className="h-64"><ResponsiveContainer><PieChart><Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label>{data.map((_,i)=><Cell key={i}/>)}</Pie><Tooltip formatter={(v)=>`${money(Number(v))} ₽`}/></PieChart></ResponsiveContainer></div>:<div className="muted py-12 text-center">Добавьте расходы, чтобы увидеть диаграмму.</div>}</div>
+    <div className="card mt-4 p-4"><h3 className="font-black">Прогресс</h3><div className="mt-3 space-y-3"><div><div className="flex justify-between text-sm"><span>Выполнено привычек</span><b>{done}</b></div></div><div><div className="flex justify-between text-sm"><span>Задач выполнено</span><b>{tasks.filter(t=>t.completed).length}/{tasks.length}</b></div></div><div><div className="flex justify-between text-sm"><span>Целей накопления</span><b>{goals.filter(g=>g.saved>=g.target).length}/{goals.length}</b></div></div></div></div>
+  </Page>
 }
 
-function Stat({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="card p-4">
-      <div className="text-sm muted">{title}</div>
-      <div className="mt-1 text-xl font-bold">{value}</div>
-    </div>
-  );
+function Profile(){
+  const {premium,patch,resetData,habits,tasks,transactions}=useStore();const [confirm,setConfirm]=useState(false);
+  const exportData=()=>{const data={exportedAt:new Date().toISOString(),habits,tasks,transactions};const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));a.download=`habitflow-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href)};
+  return <Page title="Профиль"><div className="card p-5"><div className="flex items-center gap-4"><div className="flex h-16 w-16 items-center justify-center rounded-3xl primary"><Sparkles/></div><div><div className="text-xl font-black">HabitFlow</div><div className="muted">Личный центр продуктивности</div></div></div></div>
+    <div className="mt-4 space-y-2"><button className="card flex w-full items-center gap-3 p-4 text-left" onClick={()=>patch({premium:!premium})}><Sparkles size={19}/><span className="flex-1"><b>Premium</b><div className="muted text-xs">Демо-переключатель для будущей подписки</div></span><Pill>{premium?"Включён":"Выключен"}</Pill></button><button className="card flex w-full items-center gap-3 p-4 text-left" onClick={exportData}><Download size={19}/><span><b>Экспорт данных</b><div className="muted text-xs">JSON-резервная копия</div></span></button><button className="card flex w-full items-center gap-3 p-4 text-left" onClick={()=>setConfirm(true)}><RotateCcw size={19}/><span><b>Сбросить данные</b><div className="muted text-xs">Удалить локальные данные приложения</div></span></button></div>
+    {confirm&&<Modal title="Сбросить HabitFlow?" onClose={()=>setConfirm(false)}><p className="muted mb-4">Все привычки, задачи и финансы будут удалены из текущего хранилища.</p><button className="w-full rounded-xl bg-red-500 p-3 font-bold text-white" onClick={()=>{resetData();setConfirm(false)}}>Да, сбросить</button></Modal>}
+  </Page>
 }
 
-function calcStreak(completions: string[]) {
-  const dates = new Set(completions);
-  let count = 0;
-  let cursor = new Date();
-  while (dates.has(format(cursor, "yyyy-MM-dd"))) {
-    count++;
-    cursor = addDays(cursor, -1);
-  }
-  return count;
-}
+function Onboarding({onDone}:{onDone:()=>void}){return <div className="flex min-h-screen items-center justify-center p-6"><div className="w-full max-w-lg text-center"><div className="mx-auto mb-5 flex h-24 w-24 items-center justify-center rounded-[28px] primary shadow-lg"><Target size={48}/></div><h1 className="text-4xl font-black">HabitFlow</h1><p className="muted mt-3 text-lg">Привычки, задачи и финансы — в одном месте.</p><div className="card mt-7 space-y-4 p-5 text-left"><div>🔥 Отслеживайте привычки и streaks</div><div>✓ Управляйте задачами и дедлайнами</div><div>💰 Контролируйте расходы и накопления</div><div>📊 Анализируйте прогресс</div></div><button className="primary mt-5 w-full rounded-2xl p-4 text-lg font-black" onClick={onDone}>Начать</button></div></div>}
 
-function Habits() {
-  const { habits, addHabit, toggleHabit, removeHabit } = useStore();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("Личное");
-  const [color, setColor] = useState("#2481cc");
-
-  const completed = habits.filter((h) => h.completions.includes(today())).length;
-  const percent = habits.length ? Math.round(completed / habits.length * 100) : 0;
-
-  return (
-    <Page
-      title="Привычки"
-      action={
-        <button className="primary rounded-full p-3" onClick={() => setOpen(true)}>
-          <Plus />
-        </button>
-      }
-    >
-      <div className="card mb-4 p-5">
-        <div className="flex justify-between">
-          <div>
-            <div className="muted">Сегодня</div>
-            <div className="mt-1 text-3xl font-bold">{completed}/{habits.length}</div>
-          </div>
-          <div className="text-right">
-            <div className="muted">Выполнение</div>
-            <div className="mt-1 text-2xl font-bold">{percent}%</div>
-          </div>
-        </div>
-        <div className="mt-4 h-2 rounded-full bg-black/10">
-          <div className="primary h-2 rounded-full" style={{ width: `${percent}%` }} />
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {habits.map((habit) => {
-          const done = habit.completions.includes(today());
-          const streak = calcStreak(habit.completions);
-
-          return (
-            <div className="card flex items-center gap-3 p-4" key={habit.id}>
-              <div
-                className="flex h-11 w-11 items-center justify-center rounded-2xl text-white"
-                style={{ background: habit.color }}
-              >
-                <Target size={21} />
-              </div>
-              <div className="flex-1">
-                <div className="font-semibold">{habit.name}</div>
-                <div className="text-sm muted">
-                  {habit.category} · 🔥 {streak} дней
-                </div>
-              </div>
-              <button
-                onClick={() => toggleHabit(habit.id)}
-                className={`rounded-xl px-4 py-2 font-semibold ${done ? "bg-green-500 text-white" : "bg-black/5"}`}
-              >
-                {done ? "✓" : "Выполнено"}
-              </button>
-              <button className="muted" onClick={() => removeHabit(habit.id)}>
-                <Trash2 size={17} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {open && (
-        <Modal title="Новая привычка" onClose={() => setOpen(false)}>
-          <Field label="Название">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Например, читать 20 минут"
-            />
-          </Field>
-          <Field label="Категория">
-            <Input value={category} onChange={(e) => setCategory(e.target.value)} />
-          </Field>
-          <Field label="Цвет">
-            <Input
-              type="color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="mt-1 h-12 w-full"
-            />
-          </Field>
-          <button
-            className="primary w-full rounded-xl p-3 font-semibold"
-            onClick={() => {
-              if (!name.trim()) return;
-              addHabit({ name: name.trim(), category, color });
-              setName("");
-              setOpen(false);
-            }}
-          >
-            Создать
-          </button>
-        </Modal>
-      )}
-    </Page>
-  );
-}
-
-function Tasks() {
-  const { tasks, addTask, toggleTask, removeTask } = useStore();
-  const [open, setOpen] = useState(false);
-  const [filter, setFilter] = useState("all");
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState<Priority>("medium");
-  const [dueDate, setDueDate] = useState(today());
-
-  const visible = tasks.filter((task) => {
-    if (filter === "done") return task.completed;
-    if (filter === "today") return task.dueDate === today() && !task.completed;
-    if (filter === "upcoming") return !!task.dueDate && isFuture(parseISO(task.dueDate));
-    return true;
-  });
-
-  return (
-    <Page
-      title="Задачи"
-      action={
-        <button className="primary rounded-full p-3" onClick={() => setOpen(true)}>
-          <Plus />
-        </button>
-      }
-    >
-      <div className="mb-4 flex gap-2 overflow-x-auto">
-        {[
-          ["all", "Все"],
-          ["today", "Сегодня"],
-          ["upcoming", "Предстоящие"],
-          ["done", "Выполненные"]
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            onClick={() => setFilter(value)}
-            className={`whitespace-nowrap rounded-full px-4 py-2 ${filter === value ? "primary" : "bg-black/5"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-3">
-        {visible.map((task) => (
-          <div className="card flex items-center gap-3 p-4" key={task.id}>
-            <button
-              onClick={() => toggleTask(task.id)}
-              className={`flex h-7 w-7 items-center justify-center rounded-full border-2 ${task.completed ? "border-green-500 bg-green-500 text-white" : "border-gray-300"}`}
-            >
-              {task.completed ? "✓" : ""}
-            </button>
-            <div className="flex-1">
-              <div className={`font-semibold ${task.completed ? "line-through opacity-50" : ""}`}>
-                {task.title}
-              </div>
-              <div className="text-sm muted">
-                {task.dueDate || "Без дедлайна"} ·{" "}
-                {task.priority === "high" ? "Высокий" : task.priority === "medium" ? "Средний" : "Низкий"}
-              </div>
-            </div>
-            <button className="muted" onClick={() => removeTask(task.id)}>
-              <Trash2 size={17} />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {open && (
-        <Modal title="Новая задача" onClose={() => setOpen(false)}>
-          <Field label="Название">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Что нужно сделать?" />
-          </Field>
-          <Field label="Приоритет">
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-              className="mt-1 w-full rounded-xl bg-black/5 p-3"
-            >
-              <option value="high">Высокий</option>
-              <option value="medium">Средний</option>
-              <option value="low">Низкий</option>
-            </select>
-          </Field>
-          <Field label="Дедлайн">
-            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </Field>
-          <button
-            className="primary w-full rounded-xl p-3 font-semibold"
-            onClick={() => {
-              if (!title.trim()) return;
-              addTask({ title: title.trim(), priority, dueDate });
-              setTitle("");
-              setOpen(false);
-            }}
-          >
-            Добавить
-          </button>
-        </Modal>
-      )}
-    </Page>
-  );
-}
-
-function Finance() {
-  const {
-    transactions, categories, wallets,
-    addTransaction, removeTransaction, addWallet, addCategory
-  } = useStore();
-
-  const [open, setOpen] = useState(false);
-  const [walletOpen, setWalletOpen] = useState(false);
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const [type, setType] = useState<TransactionType>("expense");
-  const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState(categories.find(c => c.type === "expense")?.id ?? "");
-  const [comment, setComment] = useState("");
-
-  const income = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
-  const expense = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
-  const balance = wallets.reduce((sum, wallet) => sum + wallet.balance, 0);
-
-  return (
-    <Page
-      title="Финансы"
-      action={
-        <button className="primary rounded-full p-3" onClick={() => setOpen(true)}>
-          <Plus />
-        </button>
-      }
-    >
-      <div className="mb-4 grid grid-cols-2 gap-3">
-        <Stat title="Баланс" value={`${money(balance)} ₽`} />
-        <Stat title="Расходы" value={`${money(expense)} ₽`} />
-        <Stat title="Доходы" value={`${money(income)} ₽`} />
-        <Stat title="Операции" value={String(transactions.length)} />
-      </div>
-
-      <div className="card mb-4 p-4">
-        <div className="flex items-center justify-between">
-          <b>Кошельки</b>
-          <button className="primary rounded-lg px-3 py-1" onClick={() => setWalletOpen(true)}>+ счёт</button>
-        </div>
-        {wallets.map(wallet => (
-          <div className="mt-3 flex justify-between" key={wallet.id}>
-            <span>{wallet.name}</span>
-            <b>{money(wallet.balance)} {wallet.currency}</b>
-          </div>
-        ))}
-      </div>
-
-      <div className="card mb-4 p-4">
-        <div className="flex justify-between">
-          <b>Категории</b>
-          <button className="muted" onClick={() => setCategoryOpen(true)}>Добавить</button>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {categories.map(category => (
-            <span className="rounded-full bg-black/5 px-3 py-1 text-sm" key={category.id}>
-              {category.name}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <div className="card p-4">
-        <b>Последние операции</b>
-        {transactions.length === 0 && (
-          <div className="py-8 text-center muted">Пока нет операций</div>
-        )}
-        {transactions.slice().reverse().map(transaction => (
-          <div className="flex items-center gap-3 border-b border-black/5 py-3" key={transaction.id}>
-            <div className="flex-1">
-              {categories.find(c => c.id === transaction.categoryId)?.name ?? "Категория"}
-              <div className="text-xs muted">{transaction.comment || ""}</div>
-            </div>
-            <b className={transaction.type === "income" ? "text-green-500" : ""}>
-              {transaction.type === "income" ? "+" : "-"}{money(transaction.amount)} ₽
-            </b>
-            <button className="muted" onClick={() => removeTransaction(transaction.id)}>
-              <Trash2 size={15} />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {open && (
-        <Modal title="Новая операция" onClose={() => setOpen(false)}>
-          <div className="mb-3 grid grid-cols-2 gap-2">
-            {(["expense", "income"] as TransactionType[]).map(value => (
-              <button
-                key={value}
-                onClick={() => {
-                  setType(value);
-                  setCategoryId(categories.find(c => c.type === value)?.id ?? "");
-                }}
-                className={`rounded-xl p-3 ${type === value ? "primary" : "bg-black/5"}`}
-              >
-                {value === "expense" ? "Расход" : "Доход"}
-              </button>
-            ))}
-          </div>
-          <Field label="Сумма">
-            <Input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" />
-          </Field>
-          <Field label="Категория">
-            <select
-              value={categoryId}
-              onChange={e => setCategoryId(e.target.value)}
-              className="mt-1 w-full rounded-xl bg-black/5 p-3"
-            >
-              {categories.filter(c => c.type === type).map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Комментарий">
-            <Input value={comment} onChange={e => setComment(e.target.value)} placeholder="Необязательно" />
-          </Field>
-          <button
-            className="primary w-full rounded-xl p-3 font-semibold"
-            onClick={() => {
-              const numericAmount = Number(amount);
-              if (!numericAmount || !categoryId || !wallets[0]) return;
-              addTransaction({
-                type,
-                amount: numericAmount,
-                categoryId,
-                walletId: wallets[0].id,
-                comment,
-                date: today()
-              });
-              setAmount("");
-              setComment("");
-              setOpen(false);
-            }}
-          >
-            Сохранить
-          </button>
-        </Modal>
-      )}
-
-      {walletOpen && (
-        <SimpleWallet
-          onClose={() => setWalletOpen(false)}
-          onAdd={(wallet) => { addWallet(wallet); setWalletOpen(false); }}
-        />
-      )}
-
-      {categoryOpen && (
-        <SimpleCategory
-          onClose={() => setCategoryOpen(false)}
-          onAdd={(category) => { addCategory(category); setCategoryOpen(false); }}
-        />
-      )}
-    </Page>
-  );
-}
-
-function SimpleWallet({ onClose, onAdd }: { onClose: () => void; onAdd: (value: Omit<any, "id">) => void }) {
-  const [name, setName] = useState("");
-  return (
-    <Modal title="Новый кошелёк" onClose={onClose}>
-      <Field label="Название">
-        <Input value={name} onChange={e => setName(e.target.value)} placeholder="Например, Карта" />
-      </Field>
-      <button className="primary w-full rounded-xl p-3" onClick={() => name.trim() && onAdd({ name: name.trim(), balance: 0, currency: "₽" })}>
-        Создать
-      </button>
-    </Modal>
-  );
-}
-
-function SimpleCategory({ onClose, onAdd }: { onClose: () => void; onAdd: (value: Omit<any, "id">) => void }) {
-  const [name, setName] = useState("");
-  const [type, setType] = useState<TransactionType>("expense");
-
-  return (
-    <Modal title="Новая категория" onClose={onClose}>
-      <Field label="Название">
-        <Input value={name} onChange={e => setName(e.target.value)} />
-      </Field>
-      <Field label="Тип">
-        <select value={type} onChange={e => setType(e.target.value as TransactionType)} className="mt-1 w-full rounded-xl bg-black/5 p-3">
-          <option value="expense">Расход</option>
-          <option value="income">Доход</option>
-        </select>
-      </Field>
-      <button className="primary w-full rounded-xl p-3" onClick={() => name.trim() && onAdd({ name: name.trim(), type, color: "#2481cc" })}>
-        Создать
-      </button>
-    </Modal>
-  );
-}
-
-function Analytics() {
-  const { habits, tasks, transactions, categories } = useStore();
-  const income = transactions.filter(t => t.type === "income").reduce((a, t) => a + t.amount, 0);
-  const expense = transactions.filter(t => t.type === "expense").reduce((a, t) => a + t.amount, 0);
-  const completedHabits = habits.filter(h => h.completions.includes(today())).length;
-  const completedTasks = tasks.filter(t => t.completed).length;
-
-  const chartData = categories
-    .filter(c => c.type === "expense")
-    .map(c => ({
-      name: c.name,
-      value: transactions.filter(t => t.categoryId === c.id).reduce((a, t) => a + t.amount, 0)
-    }))
-    .filter(item => item.value > 0);
-
-  return (
-    <Page title="Аналитика">
-      <div className="grid grid-cols-2 gap-3">
-        <Stat title="Привычки сегодня" value={`${completedHabits}/${habits.length}`} />
-        <Stat title="Задачи" value={`${completedTasks}/${tasks.length}`} />
-        <Stat title="Доходы" value={`${money(income)} ₽`} />
-        <Stat title="Расходы" value={`${money(expense)} ₽`} />
-      </div>
-
-      <div className="card mt-4 p-4">
-        <b>Расходы по категориям</b>
-        {chartData.length ? (
-          <div className="h-64">
-            <ResponsiveContainer>
-              <PieChart>
-                <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={85} label>
-                  {chartData.map((_, index) => <Cell key={index} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="py-10 text-center muted">Добавьте расходы, чтобы увидеть диаграмму</div>
-        )}
-      </div>
-    </Page>
-  );
-}
-
-function Profile() {
-  const { premium, patch, habits, tasks, transactions } = useStore();
-
-  const exportData = () => {
-    const data = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      habits,
-      tasks,
-      transactions
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "habitflow-export.json";
-    anchor.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <Page title="Профиль">
-      <div className="card p-5">
-        <div className="flex items-center gap-3">
-          <div className="primary flex h-14 w-14 items-center justify-center rounded-full">
-            <Settings />
-          </div>
-          <div>
-            <div className="text-lg font-bold">Мой HabitFlow</div>
-            <div className="muted">Telegram Mini App</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card mt-3 p-5">
-        <div className="flex items-center gap-3">
-          <Sparkles />
-          <div className="flex-1">
-            <b>Premium</b>
-            <div className="text-sm muted">Расширенная аналитика и возможности</div>
-          </div>
-          <button className="primary rounded-xl px-4 py-2" onClick={() => patch({ premium: true })}>
-            {premium ? "Активен" : "Подключить"}
-          </button>
-        </div>
-      </div>
-
-      <button className="card mt-3 w-full p-4 text-left" onClick={exportData}>
-        📦 Экспорт данных JSON
-      </button>
-
-      <div className="card mt-3 p-5">
-        <b>Реферальная система</b>
-        <p className="text-sm muted">Заготовка для реферальной ссылки Telegram.</p>
-        <button
-          className="primary rounded-xl px-4 py-2"
-          onClick={() => navigator.clipboard?.writeText("https://t.me/HabitFlowBot?start=ref_demo")}
-        >
-          Копировать ссылку
-        </button>
-      </div>
-    </Page>
-  );
-}
-
-function Onboarding({ done }: { done: () => void }) {
-  return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md text-center">
-        <div className="mb-5 text-6xl">🌊</div>
-        <h1 className="text-4xl font-black">HabitFlow</h1>
-        <p className="mt-3 text-lg muted">Привычки, задачи и финансы — в одном месте.</p>
-
-        <div className="card mt-6 space-y-3 p-5 text-left">
-          <div>🔥 Отслеживайте привычки и streaks</div>
-          <div>✓ Управляйте задачами и дедлайнами</div>
-          <div>💰 Контролируйте расходы и накопления</div>
-          <div>📊 Анализируйте прогресс</div>
-        </div>
-
-        <button className="primary mt-5 w-full rounded-2xl p-4 font-bold" onClick={done}>
-          Начать
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export default function App() {
-  const { onboardingDone, patch, hydrated } = useStore();
-  const [tab, setTab] = useState<Tab>("habits");
-
-  if (!hydrated) {
-    return <div className="flex min-h-screen items-center justify-center font-bold">HabitFlow…</div>;
-  }
-
-  if (!onboardingDone) {
-    return <Onboarding done={() => patch({ onboardingDone: true })} />;
-  }
-
-  const content = useMemo(() => {
-    switch (tab) {
-      case "habits": return <Habits />;
-      case "tasks": return <Tasks />;
-      case "finance": return <Finance />;
-      case "analytics": return <Analytics />;
-      case "profile": return <Profile />;
-    }
-  }, [tab]);
-
-  const navigation: [Tab, string, LucideIcon][] = [
-    ["habits", "Привычки", Target],
-    ["tasks", "Задачи", CheckSquare],
-    ["finance", "Финансы", WalletCards],
-    ["analytics", "Аналитика", BarChart3],
-    ["profile", "Профиль", Settings]
-  ];
-
-  return (
-    <div className="min-h-screen">
-      {content}
-
-      <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/5 bg-[var(--tg-theme-bg-color,#f4f5f7)]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl justify-around py-2 pb-[calc(8px+env(safe-area-inset-bottom))]">
-          {navigation.map(([value, label, Icon]) => (
-            <button
-              key={value}
-              onClick={() => setTab(value)}
-              className={`flex flex-col items-center gap-1 rounded-xl px-3 py-1 text-xs ${tab === value ? "text-[var(--tg-theme-button-color,#2481cc)]" : "muted"}`}
-            >
-              <Icon size={21} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </nav>
-    </div>
-  );
+export default function App(){
+  const {hydrated,onboardingDone,patch}=useStore();const [tab,setTab]=useState<Tab>("habits");const [dark,setDark]=useState(false);
+  if(!hydrated)return <div className="flex min-h-screen items-center justify-center font-bold">HabitFlow…</div>;
+  if(!onboardingDone)return <Onboarding onDone={()=>patch({onboardingDone:true})}/>;
+  const nav:[Tab,string,React.ComponentType<{size?:number}>][]=[["habits","Привычки",Target],["tasks","Задачи",CheckSquare],["finance","Финансы",WalletCards],["analytics","Аналитика",BarChart3],["profile","Профиль",Settings]];
+  return <div className={dark?"dark":""}><div className="min-h-screen bg-[var(--tg-theme-bg-color,#f4f5f7)] text-[var(--tg-theme-text-color,#111827)]"><div className="mx-auto max-w-2xl px-4 pt-2 text-right"><button className="muted rounded-full p-2" onClick={()=>setDark(v=>!v)}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button></div>{tab==="habits"?<Habits/>:tab==="tasks"?<Tasks/>:tab==="finance"?<Finance/>:tab==="analytics"?<Analytics/>:<Profile/>}
+  <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/5 bg-white/90 px-2 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur dark:bg-slate-900/90">{<div className="mx-auto grid max-w-2xl grid-cols-5 gap-1">{nav.map(([k,l,I])=><button key={k} onClick={()=>setTab(k)} className={`flex flex-col items-center rounded-xl py-2 text-[11px] ${tab===k?"primary":"muted bg-transparent"}`}><I size={19}/><span>{l}</span></button>)}</div>}</nav></div></div>
 }
