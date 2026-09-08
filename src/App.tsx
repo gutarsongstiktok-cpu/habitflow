@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import {
   BarChart3, Check, CheckSquare, ChevronLeft, ChevronRight, Download, Edit3,
   Plus, Settings, Sparkles, Target, Trash2, WalletCards, X, TrendingUp,
-  TrendingDown, PiggyBank, CalendarDays, Bell, Moon, Sun, RotateCcw
+  TrendingDown, PiggyBank, CalendarDays, Bell, Moon, Sun, RotateCcw, type LucideIcon
 } from "lucide-react";
 import {
   addMonths, eachDayOfInterval, endOfMonth, format, isSameDay, isSameMonth,
@@ -112,7 +112,7 @@ export default function App(){
   const {hydrated,onboardingDone,patch}=useStore();const [tab,setTab]=useState<Tab>("habits");const [dark,setDark]=useState(false);
   if(!hydrated)return <div className="flex min-h-screen items-center justify-center font-bold">HabitFlow…</div>;
   if(!onboardingDone)return <Onboarding onDone={()=>patch({onboardingDone:true})}/>;
-  const nav:[Tab,string,React.ComponentType<{size?:number}>][]=[["habits","Привычки",Target],["tasks","Задачи",CheckSquare],["finance","Финансы",WalletCards],["analytics","Аналитика",BarChart3],["profile","Профиль",Settings]];
+  const nav:[Tab,string,LucideIcon][] =[["habits","Привычки",Target],["tasks","Задачи",CheckSquare],["finance","Финансы",WalletCards],["analytics","Аналитика",BarChart3],["profile","Профиль",Settings]];
   return <div className={dark?"dark":""}><div className="min-h-screen bg-[var(--tg-theme-bg-color,#f4f5f7)] text-[var(--tg-theme-text-color,#111827)]"><div className="mx-auto max-w-2xl px-4 pt-2 text-right"><button className="muted rounded-full p-2" onClick={()=>setDark(v=>!v)}>{dark?<Sun size={18}/>:<Moon size={18}/>}</button></div>{tab==="habits"?<Habits/>:tab==="tasks"?<Tasks/>:tab==="finance"?<Finance/>:tab==="analytics"?<Analytics/>:<Profile/>}
   <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-black/5 bg-white/90 px-2 pb-[env(safe-area-inset-bottom)] pt-2 backdrop-blur dark:bg-slate-900/90">{<div className="mx-auto grid max-w-2xl grid-cols-5 gap-1">{nav.map(([k,l,I])=><button key={k} onClick={()=>setTab(k)} className={`flex flex-col items-center rounded-xl py-2 text-[11px] ${tab===k?"primary":"muted bg-transparent"}`}><I size={19}/><span>{l}</span></button>)}</div>}</nav></div></div>
 }
