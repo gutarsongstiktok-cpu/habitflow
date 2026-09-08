@@ -50,3 +50,8 @@ The frontend sends Telegram `initData` to `/api/auth/telegram`. The backend veri
 ## Important
 
 Never commit `.env`, `BOT_TOKEN`, `DATABASE_URL` or `SESSION_SECRET` to GitHub.
+
+
+## Telegram bot integration
+
+The existing `server` now handles `/start`, `/app`, and `/help` for the same UpHabit bot. Configure `BOT_TOKEN`, `MINI_APP_URL`, and `PUBLIC_BASE_URL` on Render.
