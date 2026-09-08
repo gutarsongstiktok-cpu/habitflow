@@ -166,6 +166,13 @@ export const useStore = create<Store>((set,get) => ({
   updateGoal: (i,v) => { set(s=>({goals:s.goals.map(g=>g.id===i?{...g,...v}:g)})); persist(get); },
   removeGoal: i => { set(s=>({goals:s.goals.filter(g=>g.id!==i)})); persist(get); },
   addXp: (amount,event) => { award(get,set,amount,event); persist(get); },
+  spendCoins: (amount) => {
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    if (get().gamification.coins < amount) return false;
+    set(s => ({ gamification: { ...s.gamification, coins: s.gamification.coins - amount } }));
+    persist(get);
+    return true;
+  },
   resetData: () => { set({...initial, hydrated:true}); persist(get); }
 }));
 
