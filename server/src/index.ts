@@ -36,19 +36,23 @@ function escapeHtml(value: unknown = ""): string {
     .replace(/"/g, "&quot;");
 }
 
+interface TelegramUser {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+}
+
+interface TelegramMessage {
+  message_id: number;
+  chat: { id: number; type: string };
+  from?: TelegramUser;
+  text?: string;
+}
+
 interface TelegramUpdate {
   update_id: number;
-  message?: {
-    message_id: number;
-    chat: { id: number; type: string };
-    from?: {
-      id: number;
-      first_name?: string;
-      last_name?: string;
-      username?: string;
-    };
-    text?: string;
-  };
+  message?: TelegramMessage;
 }
 
 interface TelegramApiResponse<T = unknown> {
@@ -82,11 +86,11 @@ function openAppKeyboard() {
   };
 }
 
-function userDisplayName(user?: TelegramUpdate["message"]["from"]): string {
+function userDisplayName(user?: TelegramUser): string {
   return escapeHtml(user?.first_name || user?.username || "друг");
 }
 
-async function sendStartMessage(chatId: number, user?: TelegramUpdate["message"]["from"]) {
+async function sendStartMessage(chatId: number, user?: TelegramUser) {
   const name = userDisplayName(user);
 
   const text =
