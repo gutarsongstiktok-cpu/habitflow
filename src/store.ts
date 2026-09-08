@@ -75,6 +75,7 @@ const award = (get: () => Store, set: any, amount: number, event?: string) => {
   };
   if (xp >= 100) unlock('hundred-xp');
   if (xp >= 1000) unlock('thousand-xp');
+  if (get().habits.length > 0 && get().habits.every(h => h.completions.includes(today()))) unlock('perfect-day');
   set({ gamification: { xp, coins, achievements, events } });
   return true;
 };
