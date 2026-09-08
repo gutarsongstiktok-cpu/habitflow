@@ -12,6 +12,12 @@ const botToken = process.env.BOT_TOKEN ?? "";
 const sessionSecret = process.env.SESSION_SECRET ?? "";
 const maxAge = Number(process.env.TELEGRAM_INIT_DATA_MAX_AGE ?? 86400);
 
+// Telegram bot /start integration. This uses the SAME bot token that is already
+// used to validate Mini App initData; no second bot is created.
+const miniAppUrl = (process.env.MINI_APP_URL ?? "https://habitflow-bzui.onrender.com").replace(/\\/+$/, "");
+const webhookPath = "/telegram/webhook";
+const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
+
 const allowedOrigins = (process.env.CORS_ORIGIN ?? "").split(",").map(s => s.trim()).filter(Boolean);
 app.use(cors({
   origin(origin, callback) {
@@ -20,6 +26,183 @@ app.use(cors({
   },
 }));
 app.use(express.json({ limit: "2mb" }));
+
+
+function escapeHtml(value: unknown = ""): string {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+interface TelegramUpdate {
+  update_id: number;
+  message?: {
+    message_id: number;
+    chat: { id: number; type: string };
+    from?: {
+      id: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
+    text?: string;
+  };
+}
+
+interface TelegramApiResponse<T = unknown> {
+  ok: boolean;
+  result?: T;
+  description?: string;
+}
+
+async function telegramApi<T = unknown>(method: string, body: Record<string, unknown>): Promise<T> {
+  if (!botToken) throw new Error("BOT_TOKEN is not configured");
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const data = await response.json() as TelegramApiResponse<T>;
+  if (!data.ok) throw new Error(`Telegram ${method}: ${data.description ?? "API error"}`);
+  return data.result as T;
+}
+
+function openAppKeyboard() {
+  return {
+    inline_keyboard: [[
+      {
+        text: "🚀 Открыть UpHabit",
+        web_app: { url: miniAppUrl },
+      },
+    ]],
+  };
+}
+
+function userDisplayName(user?: TelegramUpdate["message"]["from"]): string {
+  return escapeHtml(user?.first_name || user?.username || "друг");
+}
+
+async function sendStartMessage(chatId: number, user?: TelegramUpdate["message"]["from"]) {
+  const name = userDisplayName(user);
+
+  const text =
+    `👋 <b>Добро пожаловать в UpHabit, ${name}!</b>\n\n` +
+    `Твой персональный помощник для привычек, задач, целей и финансов.\n\n` +
+    `В UpHabit ты можешь:\n` +
+    `• формировать полезные привычки\n` +
+    `• ставить и выполнять задачи\n` +
+    `• отслеживать цели и прогресс\n` +
+    `• контролировать личные финансы\n` +
+    `• получать XP, монеты и достижения\n` +
+    `• анализировать свои результаты\n\n` +
+    `<b>Начни с первого шага — остальное сделаем вместе.</b>\n\n` +
+    `Нажми кнопку ниже, чтобы открыть приложение.`;
+
+  await telegramApi("sendMessage", {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+    reply_markup: openAppKeyboard(),
+  });
+}
+
+async function sendAppMessage(chatId: number) {
+  await telegramApi("sendMessage", {
+    chat_id: chatId,
+    text: "🚀 <b>UpHabit готов.</b>\n\nНажми кнопку ниже, чтобы открыть приложение.",
+    parse_mode: "HTML",
+    reply_markup: openAppKeyboard(),
+  });
+}
+
+async function sendHelpMessage(chatId: number) {
+  await telegramApi("sendMessage", {
+    chat_id: chatId,
+    text:
+      "<b>UpHabit — помощь</b>\n\n" +
+      "/start — приветствие и запуск приложения\n" +
+      "/app — открыть UpHabit\n" +
+      "/help — показать помощь",
+    parse_mode: "HTML",
+    reply_markup: openAppKeyboard(),
+  });
+}
+
+async function handleTelegramUpdate(update: TelegramUpdate) {
+  const message = update.message;
+  if (!message?.chat) return;
+
+  const chatId = message.chat.id;
+  const text = (message.text ?? "").trim();
+  const command = text.split(/\s+/)[0].split("@")[0];
+
+  if (command === "/start") {
+    await sendStartMessage(chatId, message.from);
+  } else if (command === "/app") {
+    await sendAppMessage(chatId);
+  } else if (command === "/help") {
+    await sendHelpMessage(chatId);
+  }
+}
+
+async function configureTelegramBot() {
+  if (!botToken) {
+    console.warn("BOT_TOKEN is not configured; Telegram /start integration is disabled.");
+    return;
+  }
+
+  try {
+    await telegramApi("setMyCommands", {
+      commands: [
+        { command: "start", description: "Запустить UpHabit" },
+        { command: "app", description: "Открыть приложение" },
+        { command: "help", description: "Помощь" },
+      ],
+    });
+
+    const publicBaseUrl = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
+    if (publicBaseUrl) {
+      const body: Record<string, unknown> = {
+        url: `${publicBaseUrl}${webhookPath}`,
+        allowed_updates: ["message"],
+      };
+      if (webhookSecret) body.secret_token = webhookSecret;
+
+      await telegramApi("setWebhook", body);
+      console.log(`Telegram webhook configured: ${publicBaseUrl}${webhookPath}`);
+    } else {
+      console.warn("PUBLIC_BASE_URL is not configured; set it to https://uphabit-backend.onrender.com to enable Telegram webhook.");
+    }
+
+    const me = await telegramApi<{ username?: string; first_name?: string }>("getMe", {});
+    console.log(`Telegram bot connected: @${me.username ?? me.first_name ?? "unknown"}`);
+  } catch (error) {
+    console.error("Telegram bot setup failed:", error);
+  }
+}
+
+
+app.post(webhookPath, async (req, res) => {
+  try {
+    if (webhookSecret) {
+      const receivedSecret = req.header("X-Telegram-Bot-Api-Secret-Token") ?? "";
+      if (receivedSecret !== webhookSecret) return res.status(401).json({ error: "Invalid webhook secret" });
+    }
+
+    // Acknowledge Telegram quickly; processing continues before the response is
+    // returned so errors can be logged without exposing them to Telegram.
+    const update = req.body as TelegramUpdate;
+    await handleTelegramUpdate(update);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Telegram webhook error:", error);
+    res.status(200).json({ ok: false });
+  }
+});
 
 app.get("/api/health", async (_req, res) => {
   res.json({ ok: true, service: "uphabit-backend", time: new Date().toISOString() });
@@ -102,7 +285,10 @@ app.get("/", (_req, res) => res.json({ service: "UpHabit Backend", status: "onli
 async function start() {
   try {
     await initDb();
-    app.listen(port, "0.0.0.0", () => console.log(`UpHabit backend listening on ${port}`));
+    app.listen(port, "0.0.0.0", () => {
+      console.log(`UpHabit backend listening on ${port}`);
+      void configureTelegramBot();
+    });
   } catch (error) {
     console.error("Database initialization failed:", error);
     process.exit(1);
