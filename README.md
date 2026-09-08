@@ -1,62 +1,51 @@
-# UpHabit 3.0 — Telegram Mini App + Backend
+# UpHabit 6.0 — Personal Productivity OS
 
-UpHabit is a Telegram Mini App for habits, tasks, finance and analytics.
+Финальная крупная версия Telegram Mini App: привычки, streaks, задачи, единый календарь, финансы, бюджеты, цели, аналитика, геймификация, Telegram-напоминания и AI Coach Pro.
 
-## Current architecture
+## Что сохранено
+- Telegram Mini App + существующий бот
+- Telegram initData auth + Bearer session
+- PostgreSQL JSONB без миграции старых данных
+- localStorage + Telegram CloudStorage fallback
+- существующие привычки, задачи, кошельки и операции
 
-- Frontend: React + TypeScript + Vite + Zustand
-- Telegram Mini Apps SDK: `@twa-dev/sdk`
-- Backend: Node.js + Express + TypeScript
-- Database: PostgreSQL
-- Telegram Mini App authentication: server-side `initData` validation
-- Session: signed HTTP Bearer token
-- Storage fallback: localStorage + Telegram CloudStorage
+## Что добавлено
+- AI Coach Pro через OpenAI Responses API; ключ хранится только на backend
+- персональный AI-контекст: привычки, streaks, задачи, финансы, бюджеты, цели, XP
+- fallback AI Coach, если API временно недоступен
+- месячная карта привычек и единый календарь
+- частота привычек, напоминания и Telegram scheduler
+- расширенные streaks и рекорды
+- задачи с приоритетом, дедлайном и повтором
+- финансовые кошельки, операции, бюджеты, цели и график расходов
+- Momentum Score и аналитика за 7 дней
+- XP, уровни, монеты, достижения, челленджи и Reward Store
+- экспорт JSON и безопасный сброс данных
+- светлая/тёмная тема
 
-## Deploy frontend
+## Frontend Render
+Build: `npm install && npm run build`
+Start: `npm run start`
+Environment: `VITE_API_URL=https://uphabit-backend.onrender.com`
 
-Render Web Service:
+## Backend Render
+Root Directory: `server`
+Build: `npm install && npm run build`
+Start: `npm start`
+Node: 20+
 
-- Build: `npm install && npm run build`
-- Start: `npm run start`
-- Environment variable: `VITE_API_URL=https://YOUR-BACKEND.onrender.com`
+Required: `DATABASE_URL`, `BOT_TOKEN`, `SESSION_SECRET`, `PUBLIC_BASE_URL`, `MINI_APP_URL`.
+Recommended: `CORS_ORIGIN=https://habitflow-bzui.onrender.com`.
 
-## Deploy backend
+### AI Coach Pro
+Set on backend Render:
+- `OPENAI_API_KEY=...`
+- `OPENAI_MODEL=gpt-5.6-luna` (default)
 
-Create a second Render Web Service from the same repository:
+The API key is never sent to the Telegram Mini App. The backend calls OpenAI Responses API with `store:false` and only a compact application context.
 
-- Root Directory: `server`
-- Build: `npm install && npm run build`
-- Start: `npm start`
-- Node: 20+
-
-Environment variables:
-
-- `DATABASE_URL` — Internal Database URL from Render PostgreSQL
-- `BOT_TOKEN` — token from @BotFather (keep secret; never put it in frontend)
-- `SESSION_SECRET` — long random secret
-- `CORS_ORIGIN` — frontend URL, e.g. `https://habitflow-zxq3.onrender.com`
-- `TELEGRAM_INIT_DATA_MAX_AGE` — optional, default `86400`
-
-Health check:
-
-`GET /api/health`
-
-## Telegram setup
-
-Set the frontend HTTPS URL as the Main Mini App URL in @BotFather.
-
-The frontend sends Telegram `initData` to `/api/auth/telegram`. The backend verifies its signature with the bot token, creates/updates the user in PostgreSQL and returns a signed session token.
+### Telegram reminders
+The backend checks configured habit reminders every minute and sends a Telegram message through the existing bot. Default timezone is `Europe/Chisinau`; a habit may optionally contain `timezone` and `reminderDays` in stored JSON.
 
 ## Important
-
-Never commit `.env`, `BOT_TOKEN`, `DATABASE_URL` or `SESSION_SECRET` to GitHub.
-
-
-## Telegram bot integration
-
-The existing `server` now handles `/start`, `/app`, and `/help` for the same UpHabit bot. Configure `BOT_TOKEN`, `MINI_APP_URL`, and `PUBLIC_BASE_URL` on Render.
-
-
-## UpHabit 5.2
-
-5.2 adds task editing and transaction editing while preserving the existing navigation, wallet controls, Telegram auth and PostgreSQL persistence.
+Never commit `.env`, `BOT_TOKEN`, `DATABASE_URL`, `SESSION_SECRET` or `OPENAI_API_KEY`.
