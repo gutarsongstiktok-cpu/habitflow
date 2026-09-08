@@ -36,3 +36,5 @@ button,input,select,textarea{font:inherit}button{-webkit-tap-highlight-color:tra
 @media (prefers-reduced-motion:no-preference){.progress-fill{transition:width .45s ease}.card,.action-card,.nav-item{transition:transform .16s ease,border-color .16s ease}.action-card:active{transform:scale(.98)}}
 .premium-card{background:linear-gradient(135deg,rgba(119,92,255,.14),rgba(36,155,234,.10));border-color:rgba(145,112,255,.18)}
 .action-card:disabled{opacity:.45}
+
+.icon-btn:disabled{opacity:.28;cursor:not-allowed}.analytics-profile-card{border-color:rgba(86,190,255,.12);background:linear-gradient(135deg,rgba(36,155,234,.10),rgba(119,92,255,.07))}

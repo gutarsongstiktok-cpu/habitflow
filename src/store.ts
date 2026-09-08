@@ -46,6 +46,8 @@ interface Store extends AppData {
   addTransaction: (v: Omit<Transaction, "id">) => void;
   removeTransaction: (id: string) => void;
   addWallet: (v: Omit<Wallet, "id">) => void;
+  updateWallet: (id: string, v: Partial<Wallet>) => void;
+  removeWallet: (id: string) => void;
   addCategory: (v: Omit<Category, "id">) => void;
   addBudget: (v: Omit<Budget, "id">) => void;
   removeBudget: (id: string) => void;
@@ -159,6 +161,12 @@ export const useStore = create<Store>((set,get) => ({
     set(s=>({transactions:s.transactions.filter(x=>x.id!==i),wallets:s.wallets.map(w=>w.id===tx.walletId?{...w,balance:w.balance+(tx.type==="income"?-tx.amount:tx.amount)}:w)})); persist(get);
   },
   addWallet: v => { set(s=>({wallets:[...s.wallets,{...v,id:id()}]})); persist(get); },
+  updateWallet: (i,v) => { set(s=>({wallets:s.wallets.map(w=>w.id===i?{...w,...v}:w)})); persist(get); },
+  removeWallet: i => {
+    if (get().transactions.some(t=>t.walletId===i)) return;
+    set(s=>({wallets:s.wallets.filter(w=>w.id!==i)}));
+    persist(get);
+  },
   addCategory: v => { set(s=>({categories:[...s.categories,{...v,id:id()}]})); persist(get); },
   addBudget: v => { set(s=>({budgets:[...s.budgets,{...v,id:id()}]})); persist(get); },
   removeBudget: i => { set(s=>({budgets:s.budgets.filter(b=>b.id!==i)})); persist(get); },
