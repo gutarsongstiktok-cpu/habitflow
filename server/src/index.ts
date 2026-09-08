@@ -261,7 +261,7 @@ async function reminderTick() {
       let changed=false;
       for (const h of habits) {
         const tz = h.timezone || "Europe/Chisinau";
-        const parts = new Intl.DateTimeFormat("en-GB",{timeZone:tz,hour:"2-digit",minute:"2-digit",weekday:"short",year:"numeric",month:"2-digit",day:"2-digit",hourCycle:"2-digit"}).formatToParts(now);
+        const parts = new Intl.DateTimeFormat("en-GB",{timeZone:tz,hour:"2-digit",minute:"2-digit",weekday:"short",year:"numeric",month:"2-digit",day:"2-digit",hourCycle:"h23"}).formatToParts(now);
         const hh=parts.find(x=>x.type==="hour")?.value, mm=parts.find(x=>x.type==="minute")?.value;
         const weekday=parts.find(x=>x.type==="weekday")?.value;
         const yy=parts.find(x=>x.type==="year")?.value, mo=parts.find(x=>x.type==="month")?.value, dd=parts.find(x=>x.type==="day")?.value;
