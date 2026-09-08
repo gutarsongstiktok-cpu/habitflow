@@ -1,4 +1,4 @@
-# UpHabit — Telegram Mini App + Backend
+# UpHabit 3.0 — Telegram Mini App + Backend
 
 UpHabit is a Telegram Mini App for habits, tasks, finance and analytics.
 
