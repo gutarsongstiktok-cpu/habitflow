@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { format, addDays } from "date-fns";
-import type { AppData, Habit, Task, Wallet, Category, Transaction, Budget, SavingsGoal } from "./types";
+import type { AppData, Habit, Task, Wallet, Category, Transaction, Budget, SavingsGoal, } from "./types";
+import { DEFAULT_GAMIFICATION } from "./gamification";
 import { loadCloud, loadLocal, saveEverywhere } from "./storage";
 import { authenticate, loadRemote, type TelegramProfile } from "./api";
 
@@ -19,7 +20,7 @@ const initial: AppData = {
     { id: id(), name: "Транспорт", type: "expense", color: "#8b5cf6" },
     { id: id(), name: "Зарплата", type: "income", color: "#22c55e" }
   ],
-  transactions: [], budgets: [], goals: [], onboardingDone: false, premium: false
+  transactions: [], budgets: [], goals: [], onboardingDone: false, premium: false, gamification: { ...DEFAULT_GAMIFICATION }
 };
 
 interface Store extends AppData {
@@ -43,6 +44,7 @@ interface Store extends AppData {
   addGoal: (v: Omit<SavingsGoal, "id">) => void;
   updateGoal: (id: string, v: Partial<SavingsGoal>) => void;
   removeGoal: (id: string) => void;
+  addXp: (amount: number, event?: string) => void;
   resetData: () => void;
 }
 
@@ -51,9 +53,30 @@ const persist = (get: () => Store) => {
   const data: AppData = {
     habits:s.habits,tasks:s.tasks,wallets:s.wallets,categories:s.categories,
     transactions:s.transactions,budgets:s.budgets,goals:s.goals,
-    onboardingDone:s.onboardingDone,premium:s.premium
+    onboardingDone:s.onboardingDone,premium:s.premium,gamification:s.gamification
   };
   void saveEverywhere(data);
+};
+
+const normalizeData = (data: AppData): AppData => ({
+  ...data,
+  gamification: { ...DEFAULT_GAMIFICATION, ...(data.gamification ?? {}) },
+});
+
+const award = (get: () => Store, set: any, amount: number, event?: string) => {
+  const g = get().gamification;
+  if (event && g.events.includes(event)) return false;
+  const xp = g.xp + amount;
+  const coins = g.coins + Math.max(1, Math.round(amount / 10));
+  const events = event ? [...g.events, event] : g.events;
+  const achievements = [...g.achievements];
+  const unlock = (id: string) => {
+    if (!achievements.includes(id)) achievements.push(id);
+  };
+  if (xp >= 100) unlock('hundred-xp');
+  if (xp >= 1000) unlock('thousand-xp');
+  set({ gamification: { xp, coins, achievements, events } });
+  return true;
 };
 
 export const useStore = create<Store>((set,get) => ({
@@ -62,12 +85,12 @@ export const useStore = create<Store>((set,get) => ({
     try {
       const local = loadLocal();
       const cloud = await Promise.race([loadCloud(), new Promise<null>(r => setTimeout(()=>r(null),1400))]);
-      const base = cloud ?? local ?? initial;
+      const base = normalizeData(cloud ?? local ?? initial);
 
       try {
         const remote = await authenticate(base);
         if (remote) {
-          set({ ...remote.data, telegramUser: remote.user, hydrated:true });
+          set({ ...normalizeData(remote.data), telegramUser: remote.user, hydrated:true });
           return;
         }
       } catch (error) {
@@ -77,23 +100,47 @@ export const useStore = create<Store>((set,get) => ({
       try {
         const remote = await loadRemote();
         if (remote) {
-          set({ ...remote.data, telegramUser: remote.user, hydrated:true });
+          set({ ...normalizeData(remote.data), telegramUser: remote.user, hydrated:true });
           return;
         }
       } catch {}
 
       set({ ...base, telegramUser:null, hydrated:true });
     } catch {
-      set({ ...(loadLocal() ?? initial), telegramUser:null, hydrated:true });
+      set({ ...normalizeData(loadLocal() ?? initial), telegramUser:null, hydrated:true });
     }
   },
   patch: v => { set(v); persist(get); },
   addHabit: v => { set(s=>({habits:[...s.habits,{...v,id:id(),createdAt:new Date().toISOString(),completions:[]}]})); persist(get); },
   updateHabit: (i,v) => { set(s=>({habits:s.habits.map(h=>h.id===i?{...h,...v}:h)})); persist(get); },
-  toggleHabit: (i,d=today()) => { set(s=>({habits:s.habits.map(h=>h.id===i?{...h,completions:h.completions.includes(d)?h.completions.filter(x=>x!==d):[...h.completions,d]}:h)})); persist(get); },
+  toggleHabit: (i,d=today()) => {
+    const h=get().habits.find(x=>x.id===i); if(!h)return;
+    const removing=h.completions.includes(d);
+    set(s=>({habits:s.habits.map(x=>x.id===i?{...x,completions:removing?x.completions.filter(y=>y!==d):[...x.completions,d]}:x)}));
+    if(!removing){
+      award(get,set,10,`habit:${i}:${d}`);
+      const all=get().habits.length>0 && get().habits.every(x=>x.completions.includes(d));
+      if(all) award(get,set,50,`perfect:${d}`);
+      if(get().gamification.achievements.includes('first-habit')===false){
+        const g=get().gamification; set({gamification:{...g,achievements:[...g.achievements,'first-habit']}}); award(get,set,50,'achievement:first-habit');
+      }
+      const maxStreak=get().habits.length?Math.max(...get().habits.map(x=>{const ds=new Set(x.completions);let n=0,dt=new Date(d+'T00:00:00');while(ds.has(dt.toISOString().slice(0,10))){n++;dt.setDate(dt.getDate()-1)}return n})):0;
+      if(maxStreak>=7 && !get().gamification.achievements.includes('week-streak')){ const g=get().gamification; set({gamification:{...g,achievements:[...g.achievements,'week-streak']}}); award(get,set,200,'achievement:week-streak'); }
+    }
+    persist(get);
+  },
   removeHabit: i => { set(s=>({habits:s.habits.filter(h=>h.id!==i)})); persist(get); },
   addTask: v => { set(s=>({tasks:[...s.tasks,{...v,id:id(),createdAt:new Date().toISOString(),completed:false}]})); persist(get); },
-  toggleTask: i => { set(s=>({tasks:s.tasks.map(t=>t.id===i?{...t,completed:!t.completed}:t)})); persist(get); },
+  toggleTask: i => {
+    const t=get().tasks.find(x=>x.id===i); if(!t)return;
+    const completing=!t.completed;
+    set(s=>({tasks:s.tasks.map(x=>x.id===i?{...x,completed:completing}:x)}));
+    if(completing){
+      award(get,set,20,`task:${i}`);
+      if(!get().gamification.achievements.includes('first-task')){ const g=get().gamification; set({gamification:{...g,achievements:[...g.achievements,'first-task']}}); award(get,set,50,'achievement:first-task'); }
+    }
+    persist(get);
+  },
   removeTask: i => { set(s=>({tasks:s.tasks.filter(t=>t.id!==i)})); persist(get); },
   addTransaction: v => { set(s=>({transactions:[...s.transactions,{...v,id:id()}],wallets:s.wallets.map(w=>w.id===v.walletId?{...w,balance:w.balance+(v.type==="income"?v.amount:-v.amount)}:w)})); persist(get); },
   removeTransaction: i => {
@@ -107,6 +154,7 @@ export const useStore = create<Store>((set,get) => ({
   addGoal: v => { set(s=>({goals:[...s.goals,{...v,id:id()}]})); persist(get); },
   updateGoal: (i,v) => { set(s=>({goals:s.goals.map(g=>g.id===i?{...g,...v}:g)})); persist(get); },
   removeGoal: i => { set(s=>({goals:s.goals.filter(g=>g.id!==i)})); persist(get); },
+  addXp: (amount,event) => { award(get,set,amount,event); persist(get); },
   resetData: () => { set({...initial, hydrated:true}); persist(get); }
 }));
 

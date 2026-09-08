@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   BarChart3, Check, CheckSquare, ChevronLeft, ChevronRight, Download, Edit3,
-  Plus, Settings, Sparkles, Target, Trash2, WalletCards, X, TrendingUp,
+  Plus, Settings, Sparkles, Target, Trash2, WalletCards, X, TrendingUp, Trophy, Zap, Coins,
   TrendingDown, PiggyBank, CalendarDays, Bell, Moon, Sun, RotateCcw, type LucideIcon
 } from "lucide-react";
 import {
@@ -12,6 +12,7 @@ import { ru } from "date-fns/locale";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useStore } from "./store";
 import type { Habit, Priority, RepeatRule, TransactionType } from "./types";
+import { ACHIEVEMENTS, levelProgress } from "./gamification";
 
 type Tab="habits"|"tasks"|"finance"|"analytics"|"profile";
 const today=()=>format(new Date(),"yyyy-MM-dd");
@@ -34,6 +35,19 @@ function Pill({children}:{children:React.ReactNode}){return <span className="rou
 function calcStreak(ds:string[]){const s=new Set(ds);let n=0,d=new Date();while(s.has(format(d,"yyyy-MM-dd"))){n++;d.setDate(d.getDate()-1)}return n}
 function bestStreak(ds:string[]){if(!ds.length)return 0;const a=[...new Set(ds)].sort();let best=1,cur=1;for(let i=1;i<a.length;i++){const d1=new Date(a[i-1]+"T00:00:00"),d2=new Date(a[i]+"T00:00:00");if((d2.getTime()-d1.getTime())===86400000){cur++;best=Math.max(best,cur)}else cur=1}return best}
 
+function GamificationCard(){
+  const {gamification}=useStore();
+  const p=levelProgress(gamification.xp);
+  return <div className="card mb-4 overflow-hidden p-5">
+    <div className="flex items-center gap-3">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl primary"><Trophy size={23}/></div>
+      <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><div><span className="muted text-sm">Твой уровень</span><div className="text-2xl font-black">Level {p.level}</div></div><div className="text-right"><div className="flex items-center justify-end gap-1 font-black"><Zap size={16}/> {gamification.xp} XP</div><div className="muted flex items-center justify-end gap-1 text-sm"><Coins size={14}/> {gamification.coins} монет</div></div></div></div>
+    </div>
+    <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10"><div className="primary h-full rounded-full transition-all" style={{width:`${p.pct}%`}}/></div>
+    <div className="muted mt-2 flex justify-between text-xs"><span>{p.current} / {p.needed} XP до следующего уровня</span><span>{p.pct}%</span></div>
+  </div>
+}
+
 function Habits(){
   const {habits,addHabit,updateHabit,toggleHabit,removeHabit}=useStore();
   const [open,setOpen]=useState(false),[edit,setEdit]=useState<Habit|null>(null),[month,setMonth]=useState(new Date());
@@ -43,6 +57,7 @@ function Habits(){
   const openEdit=(h?:Habit)=>{if(h){setEdit(h);setName(h.name);setCat(h.category);setColor(h.color);setReminder(h.reminder??"")}else{setEdit(null);setName("");setCat("Личное");setColor("#2481cc");setReminder("")}setOpen(true)};
   const save=()=>{if(!name.trim())return;const v={name:name.trim(),category:cat.trim()||"Личное",color,reminder:reminder||undefined};edit?updateHabit(edit.id,v):addHabit(v);setOpen(false)};
   return <Page title="Привычки" action={<button className="primary rounded-full p-3" onClick={()=>openEdit()}><Plus/></button>}>
+    <GamificationCard/>
     <div className="card mb-4 p-5"><div className="flex justify-between"><div><div className="muted">Сегодня</div><div className="text-3xl font-black">{done}/{habits.length}</div></div><div className="text-right"><div className="muted">Выполнение</div><div className="text-2xl font-black">{pct}%</div></div></div><div className="mt-4 h-2 rounded-full bg-black/10"><div className="primary h-2 rounded-full transition-all" style={{width:`${pct}%`}}/></div></div>
     <div className="mb-3 flex items-center justify-between"><button onClick={()=>setMonth(subMonths(month,1))}><ChevronLeft/></button><b>{format(month,"LLLL yyyy",{locale:ru})}</b><button onClick={()=>setMonth(addMonths(month,1))}><ChevronRight/></button></div>
     <div className="mb-4 grid grid-cols-7 gap-1 text-center text-xs">{["Пн","Вт","Ср","Чт","Пт","Сб","Вс"].map(x=><span className="muted" key={x}>{x}</span>)}{Array.from({length:(startOfMonth(month).getDay()+6)%7}).map((_,i)=><span key={"e"+i}/>)}{days.map(d=><span key={d.toISOString()} className={`rounded-lg p-1 ${isToday(d)?"primary font-bold":""}`}>{format(d,"d")}</span>)}</div>
@@ -98,9 +113,12 @@ function Analytics(){
 }
 
 function Profile(){
-  const {premium,patch,resetData,habits,tasks,transactions,telegramUser}=useStore();const [confirm,setConfirm]=useState(false);
-  const exportData=()=>{const data={exportedAt:new Date().toISOString(),habits,tasks,transactions};const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));a.download=`habitflow-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href)};
+  const {premium,patch,resetData,habits,tasks,transactions,telegramUser,gamification}=useStore();const [confirm,setConfirm]=useState(false);
+  const p=levelProgress(gamification.xp);
+  const exportData=()=>{const data={exportedAt:new Date().toISOString(),habits,tasks,transactions,gamification};const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));a.download=`uphabit-backup-${today()}.json`;a.click();URL.revokeObjectURL(a.href)};
   return <Page title="Профиль"><div className="card p-5"><div className="flex items-center gap-4"><div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-3xl primary">{telegramUser?.photoUrl ? <img src={telegramUser.photoUrl} alt="" className="h-full w-full object-cover" /> : <Sparkles/>}</div><div><div className="text-xl font-black">{telegramUser?.firstName ? `${telegramUser.firstName}${telegramUser.lastName ? ` ${telegramUser.lastName}` : ""}` : "UpHabit"}</div><div className="muted">{telegramUser?.username ? `@${telegramUser.username}` : "Личный центр продуктивности"}</div></div></div></div>
+    <div className="card mt-4 p-5"><div className="flex items-center justify-between"><div><div className="muted text-sm">Прогресс</div><div className="text-3xl font-black">Level {p.level}</div></div><div className="text-right"><div className="flex items-center justify-end gap-1 font-black"><Zap size={16}/> {gamification.xp} XP</div><div className="muted flex items-center justify-end gap-1 text-sm"><Coins size={14}/> {gamification.coins} монет</div></div></div><div className="mt-4 h-2 rounded-full bg-black/10"><div className="primary h-2 rounded-full" style={{width:`${p.pct}%`}}/></div><div className="muted mt-2 text-xs">{p.current} / {p.needed} XP до Level {p.level+1}</div></div>
+    <div className="mt-4"><div className="mb-3 flex items-center justify-between"><h3 className="font-black">🏆 Достижения</h3><Pill>{gamification.achievements.length}/{ACHIEVEMENTS.length}</Pill></div><div className="grid grid-cols-2 gap-2">{ACHIEVEMENTS.map(a=>{const unlocked=gamification.achievements.includes(a.id);return <div key={a.id} className={`card p-3 ${unlocked?"":"opacity-45"}`}><div className="text-2xl">{a.icon}</div><div className="mt-1 font-bold text-sm">{a.title}</div><div className="muted text-xs">{a.desc}</div></div>})}</div></div>
     <div className="mt-4 space-y-2"><button className="card flex w-full items-center gap-3 p-4 text-left" onClick={()=>patch({premium:!premium})}><Sparkles size={19}/><span className="flex-1"><b>Premium</b><div className="muted text-xs">Демо-переключатель для будущей подписки</div></span><Pill>{premium?"Включён":"Выключен"}</Pill></button><button className="card flex w-full items-center gap-3 p-4 text-left" onClick={exportData}><Download size={19}/><span><b>Экспорт данных</b><div className="muted text-xs">JSON-резервная копия</div></span></button><button className="card flex w-full items-center gap-3 p-4 text-left" onClick={()=>setConfirm(true)}><RotateCcw size={19}/><span><b>Сбросить данные</b><div className="muted text-xs">Удалить локальные данные приложения</div></span></button></div>
     {confirm&&<Modal title="Сбросить UpHabit?" onClose={()=>setConfirm(false)}><p className="muted mb-4">Все привычки, задачи и финансы будут удалены из текущего хранилища.</p><button className="w-full rounded-xl bg-red-500 p-3 font-bold text-white" onClick={()=>{resetData();setConfirm(false)}}>Да, сбросить</button></Modal>}
   </Page>
