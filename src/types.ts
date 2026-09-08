@@ -20,7 +20,10 @@ export interface Budget { id: string; categoryId: string; month: string; limit: 
 export interface SavingsGoal { id: string; name: string; target: number; saved: number; deadline?: string; }
 export interface Gamification { xp: number; coins: number; achievements: string[]; events: string[]; }
 
+export interface RewardItem { id: string; name: string; icon: string; cost: number; description: string; premium?: boolean; }
+
 export interface AppData {
+  rewards: RewardItem[];
   habits: Habit[]; tasks: Task[]; wallets: Wallet[]; categories: Category[];
   transactions: Transaction[]; budgets: Budget[]; goals: SavingsGoal[];
   onboardingDone: boolean; premium: boolean; gamification: Gamification;

@@ -8,7 +8,15 @@ import { authenticate, loadRemote, type TelegramProfile } from "./api";
 const today = () => format(new Date(), "yyyy-MM-dd");
 const id = () => crypto.randomUUID();
 
+const DEFAULT_REWARDS = [
+  { id: "streak-shield", name: "Щит серии", icon: "🛡️", cost: 150, description: "Одно восстановление серии при пропуске." },
+  { id: "focus-boost", name: "Focus Boost", icon: "⚡", cost: 100, description: "+50 XP к следующему выполненному действию." },
+  { id: "theme-neon", name: "Неоновая тема", icon: "🌌", cost: 300, description: "Эксклюзивный стиль профиля." },
+  { id: "premium-day", name: "Premium на день", icon: "💎", cost: 500, description: "Попробуй Premium бесплатно на 24 часа." }
+];
+
 const initial: AppData = {
+  rewards: DEFAULT_REWARDS,
   habits: [
     { id: id(), name: "Выпить воду", category: "Здоровье", color: "#2481cc", createdAt: new Date().toISOString(), completions: [] },
     { id: id(), name: "Тренировка", category: "Спорт", color: "#8b5cf6", createdAt: new Date().toISOString(), completions: [] }
@@ -45,13 +53,14 @@ interface Store extends AppData {
   updateGoal: (id: string, v: Partial<SavingsGoal>) => void;
   removeGoal: (id: string) => void;
   addXp: (amount: number, event?: string) => void;
+  spendCoins: (amount: number) => boolean;
   resetData: () => void;
 }
 
 const persist = (get: () => Store) => {
   const s = get();
   const data: AppData = {
-    habits:s.habits,tasks:s.tasks,wallets:s.wallets,categories:s.categories,
+    rewards:s.rewards,habits:s.habits,tasks:s.tasks,wallets:s.wallets,categories:s.categories,
     transactions:s.transactions,budgets:s.budgets,goals:s.goals,
     onboardingDone:s.onboardingDone,premium:s.premium,gamification:s.gamification
   };
@@ -60,6 +69,7 @@ const persist = (get: () => Store) => {
 
 const normalizeData = (data: AppData): AppData => ({
   ...data,
+  rewards: data.rewards ?? DEFAULT_REWARDS,
   gamification: { ...DEFAULT_GAMIFICATION, ...(data.gamification ?? {}) },
 });
 
