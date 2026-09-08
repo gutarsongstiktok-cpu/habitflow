@@ -42,8 +42,10 @@ interface Store extends AppData {
   removeHabit: (id: string) => void;
   addTask: (v: Omit<Task, "id"|"createdAt"|"completed">) => void;
   toggleTask: (id: string) => void;
+  updateTask: (id: string, v: Partial<Task>) => void;
   removeTask: (id: string) => void;
   addTransaction: (v: Omit<Transaction, "id">) => void;
+  updateTransaction: (id: string, v: Partial<Transaction>) => void;
   removeTransaction: (id: string) => void;
   addWallet: (v: Omit<Wallet, "id">) => void;
   updateWallet: (id: string, v: Partial<Wallet>) => void;
@@ -154,8 +156,24 @@ export const useStore = create<Store>((set,get) => ({
     }
     persist(get);
   },
+  updateTask: (i,v) => { set(s=>({tasks:s.tasks.map(t=>t.id===i?{...t,...v}:t)})); persist(get); },
   removeTask: i => { set(s=>({tasks:s.tasks.filter(t=>t.id!==i)})); persist(get); },
   addTransaction: v => { set(s=>({transactions:[...s.transactions,{...v,id:id()}],wallets:s.wallets.map(w=>w.id===v.walletId?{...w,balance:w.balance+(v.type==="income"?v.amount:-v.amount)}:w)})); persist(get); },
+  updateTransaction: (i,v) => {
+    const old=get().transactions.find(x=>x.id===i); if(!old)return;
+    const next={...old,...v};
+    if (!Number.isFinite(next.amount) || next.amount <= 0 || !next.walletId) return;
+    set(s=>({
+      transactions:s.transactions.map(t=>t.id===i?next:t),
+      wallets:s.wallets.map(w=>{
+        let delta=0;
+        if(w.id===old.walletId) delta-=old.type==="income"?old.amount:-old.amount;
+        if(w.id===next.walletId) delta+=next.type==="income"?next.amount:-next.amount;
+        return delta?{...w,balance:w.balance+delta}:w;
+      })
+    }));
+    persist(get);
+  },
   removeTransaction: i => {
     const tx=get().transactions.find(x=>x.id===i); if(!tx)return;
     set(s=>({transactions:s.transactions.filter(x=>x.id!==i),wallets:s.wallets.map(w=>w.id===tx.walletId?{...w,balance:w.balance+(tx.type==="income"?-tx.amount:tx.amount)}:w)})); persist(get);
