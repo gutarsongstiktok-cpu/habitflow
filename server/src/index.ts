@@ -14,7 +14,7 @@ const maxAge = Number(process.env.TELEGRAM_INIT_DATA_MAX_AGE ?? 86400);
 
 // Telegram bot /start integration. This uses the SAME bot token that is already
 // used to validate Mini App initData; no second bot is created.
-const miniAppUrl = (process.env.MINI_APP_URL ?? "https://habitflow-bzui.onrender.com").replace(/\\/+$/, "");
+const miniAppUrl = (process.env.MINI_APP_URL ?? "https://habitflow-bzui.onrender.com").replace(/\/+$/, "");
 const webhookPath = "/telegram/webhook";
 const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
 
