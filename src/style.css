@@ -38,3 +38,4 @@ button,input,select,textarea{font:inherit}button{-webkit-tap-highlight-color:tra
 .action-card:disabled{opacity:.45}
 
 .icon-btn:disabled{opacity:.28;cursor:not-allowed}.analytics-profile-card{border-color:rgba(86,190,255,.12);background:linear-gradient(135deg,rgba(36,155,234,.10),rgba(119,92,255,.07))}
+.ai-chat{max-height:46vh;overflow:auto;padding-right:2px}.chat-user,.chat-ai{display:flex;gap:9px;align-items:flex-start;padding:11px 13px;border-radius:17px;font-size:13px;line-height:1.45}.chat-user{margin-left:12%;background:rgba(36,155,234,.13)}.chat-ai{margin-right:8%;background:rgba(255,255,255,.055)}.chat-user span,.chat-ai>svg{flex:none;color:#61c3ff}.chat-user p,.chat-ai p{margin:0;white-space:pre-wrap}.ai-coach-head{background:linear-gradient(135deg,rgba(36,155,234,.12),rgba(119,92,255,.10));border-color:rgba(86,190,255,.13)}

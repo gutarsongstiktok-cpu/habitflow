@@ -1,205 +1,34 @@
-import { create } from "zustand";
-import { format, addDays } from "date-fns";
-import type { AppData, Habit, Task, Wallet, Category, Transaction, Budget, SavingsGoal, } from "./types";
-import { DEFAULT_GAMIFICATION } from "./gamification";
-import { loadCloud, loadLocal, saveEverywhere } from "./storage";
-import { authenticate, loadRemote, type TelegramProfile } from "./api";
-
-const today = () => format(new Date(), "yyyy-MM-dd");
-const id = () => crypto.randomUUID();
-
-const DEFAULT_REWARDS = [
-  { id: "streak-shield", name: "Щит серии", icon: "🛡️", cost: 150, description: "Одно восстановление серии при пропуске." },
-  { id: "focus-boost", name: "Focus Boost", icon: "⚡", cost: 100, description: "+50 XP к следующему выполненному действию." },
-  { id: "theme-neon", name: "Неоновая тема", icon: "🌌", cost: 300, description: "Эксклюзивный стиль профиля." },
-  { id: "premium-day", name: "Premium на день", icon: "💎", cost: 500, description: "Попробуй Premium бесплатно на 24 часа." }
+import {create} from "zustand";
+import {format} from "date-fns";
+import type {AppData,Habit,Task,Wallet,Category,Transaction,Budget,SavingsGoal} from "./types";
+import {DEFAULT_GAMIFICATION} from "./gamification";
+import {loadCloud,loadLocal,saveEverywhere} from "./storage";
+import {authenticate,loadRemote,type TelegramProfile} from "./api";
+const today=()=>format(new Date(),"yyyy-MM-dd"); const id=()=>crypto.randomUUID();
+const DEFAULT_REWARDS=[
+{id:"streak-shield",name:"Щит серии",icon:"🛡️",cost:150,description:"Один раз сохранить серию при пропуске."},
+{id:"focus-boost",name:"Focus Boost",icon:"⚡",cost:100,description:"+50 XP к следующему полезному действию."},
+{id:"theme-neon",name:"Неоновая тема",icon:"🌌",cost:300,description:"Эксклюзивный визуальный режим."},
+{id:"premium-day",name:"Premium на день",icon:"💎",cost:500,description:"Демо-доступ к Premium на 24 часа."},
 ];
-
-const initial: AppData = {
-  rewards: DEFAULT_REWARDS,
-  habits: [
-    { id: id(), name: "Выпить воду", category: "Здоровье", color: "#2481cc", createdAt: new Date().toISOString(), completions: [] },
-    { id: id(), name: "Тренировка", category: "Спорт", color: "#8b5cf6", createdAt: new Date().toISOString(), completions: [] }
-  ],
-  tasks: [],
-  wallets: [{ id: id(), name: "Основной", balance: 0, currency: "₽" }],
-  categories: [
-    { id: id(), name: "Продукты", type: "expense", color: "#f97316" },
-    { id: id(), name: "Транспорт", type: "expense", color: "#8b5cf6" },
-    { id: id(), name: "Зарплата", type: "income", color: "#22c55e" }
-  ],
-  transactions: [], budgets: [], goals: [], onboardingDone: false, premium: false, gamification: { ...DEFAULT_GAMIFICATION }
-};
-
-interface Store extends AppData {
-  hydrated: boolean;
-  telegramUser: TelegramProfile | null;
-  hydrate: () => Promise<void>;
-  patch: (v: Partial<AppData>) => void;
-  addHabit: (v: Omit<Habit, "id"|"createdAt"|"completions">) => void;
-  updateHabit: (id: string, v: Partial<Habit>) => void;
-  toggleHabit: (id: string, date?: string) => void;
-  removeHabit: (id: string) => void;
-  addTask: (v: Omit<Task, "id"|"createdAt"|"completed">) => void;
-  toggleTask: (id: string) => void;
-  updateTask: (id: string, v: Partial<Task>) => void;
-  removeTask: (id: string) => void;
-  addTransaction: (v: Omit<Transaction, "id">) => void;
-  updateTransaction: (id: string, v: Partial<Transaction>) => void;
-  removeTransaction: (id: string) => void;
-  addWallet: (v: Omit<Wallet, "id">) => void;
-  updateWallet: (id: string, v: Partial<Wallet>) => void;
-  removeWallet: (id: string) => void;
-  addCategory: (v: Omit<Category, "id">) => void;
-  addBudget: (v: Omit<Budget, "id">) => void;
-  removeBudget: (id: string) => void;
-  addGoal: (v: Omit<SavingsGoal, "id">) => void;
-  updateGoal: (id: string, v: Partial<SavingsGoal>) => void;
-  removeGoal: (id: string) => void;
-  addXp: (amount: number, event?: string) => void;
-  spendCoins: (amount: number) => boolean;
-  resetData: () => void;
-}
-
-const persist = (get: () => Store) => {
-  const s = get();
-  const data: AppData = {
-    rewards:s.rewards,habits:s.habits,tasks:s.tasks,wallets:s.wallets,categories:s.categories,
-    transactions:s.transactions,budgets:s.budgets,goals:s.goals,
-    onboardingDone:s.onboardingDone,premium:s.premium,gamification:s.gamification
-  };
-  void saveEverywhere(data);
-};
-
-const normalizeData = (data: AppData): AppData => ({
-  ...data,
-  rewards: data.rewards ?? DEFAULT_REWARDS,
-  gamification: { ...DEFAULT_GAMIFICATION, ...(data.gamification ?? {}) },
-});
-
-const award = (get: () => Store, set: any, amount: number, event?: string) => {
-  const g = get().gamification;
-  if (event && g.events.includes(event)) return false;
-  const xp = g.xp + amount;
-  const coins = g.coins + Math.max(1, Math.round(amount / 10));
-  const events = event ? [...g.events, event] : g.events;
-  const achievements = [...g.achievements];
-  const unlock = (id: string) => {
-    if (!achievements.includes(id)) achievements.push(id);
-  };
-  if (xp >= 100) unlock('hundred-xp');
-  if (xp >= 1000) unlock('thousand-xp');
-  if (get().habits.length > 0 && get().habits.every(h => h.completions.includes(today()))) unlock('perfect-day');
-  set({ gamification: { xp, coins, achievements, events } });
-  return true;
-};
-
-export const useStore = create<Store>((set,get) => ({
-  ...initial, hydrated:false, telegramUser:null,
-  hydrate: async () => {
-    try {
-      const local = loadLocal();
-      const cloud = await Promise.race([loadCloud(), new Promise<null>(r => setTimeout(()=>r(null),1400))]);
-      const base = normalizeData(cloud ?? local ?? initial);
-
-      try {
-        const remote = await authenticate(base);
-        if (remote) {
-          set({ ...normalizeData(remote.data), telegramUser: remote.user, hydrated:true });
-          return;
-        }
-      } catch (error) {
-        console.warn("UpHabit backend authentication unavailable; using local storage.", error);
-      }
-
-      try {
-        const remote = await loadRemote();
-        if (remote) {
-          set({ ...normalizeData(remote.data), telegramUser: remote.user, hydrated:true });
-          return;
-        }
-      } catch {}
-
-      set({ ...base, telegramUser:null, hydrated:true });
-    } catch {
-      set({ ...normalizeData(loadLocal() ?? initial), telegramUser:null, hydrated:true });
-    }
-  },
-  patch: v => { set(v); persist(get); },
-  addHabit: v => { set(s=>({habits:[...s.habits,{...v,id:id(),createdAt:new Date().toISOString(),completions:[]}]})); persist(get); },
-  updateHabit: (i,v) => { set(s=>({habits:s.habits.map(h=>h.id===i?{...h,...v}:h)})); persist(get); },
-  toggleHabit: (i,d=today()) => {
-    const h=get().habits.find(x=>x.id===i); if(!h)return;
-    const removing=h.completions.includes(d);
-    set(s=>({habits:s.habits.map(x=>x.id===i?{...x,completions:removing?x.completions.filter(y=>y!==d):[...x.completions,d]}:x)}));
-    if(!removing){
-      award(get,set,10,`habit:${i}:${d}`);
-      const all=get().habits.length>0 && get().habits.every(x=>x.completions.includes(d));
-      if(all) award(get,set,50,`perfect:${d}`);
-      if(get().gamification.achievements.includes('first-habit')===false){
-        const g=get().gamification; set({gamification:{...g,achievements:[...g.achievements,'first-habit']}}); award(get,set,50,'achievement:first-habit');
-      }
-      const maxStreak=get().habits.length?Math.max(...get().habits.map(x=>{const ds=new Set(x.completions);let n=0,dt=new Date(d+'T00:00:00');while(ds.has(dt.toISOString().slice(0,10))){n++;dt.setDate(dt.getDate()-1)}return n})):0;
-      if(maxStreak>=7 && !get().gamification.achievements.includes('week-streak')){ const g=get().gamification; set({gamification:{...g,achievements:[...g.achievements,'week-streak']}}); award(get,set,200,'achievement:week-streak'); }
-    }
-    persist(get);
-  },
-  removeHabit: i => { set(s=>({habits:s.habits.filter(h=>h.id!==i)})); persist(get); },
-  addTask: v => { set(s=>({tasks:[...s.tasks,{...v,id:id(),createdAt:new Date().toISOString(),completed:false}]})); persist(get); },
-  toggleTask: i => {
-    const t=get().tasks.find(x=>x.id===i); if(!t)return;
-    const completing=!t.completed;
-    set(s=>({tasks:s.tasks.map(x=>x.id===i?{...x,completed:completing}:x)}));
-    if(completing){
-      award(get,set,20,`task:${i}`);
-      if(!get().gamification.achievements.includes('first-task')){ const g=get().gamification; set({gamification:{...g,achievements:[...g.achievements,'first-task']}}); award(get,set,50,'achievement:first-task'); }
-    }
-    persist(get);
-  },
-  updateTask: (i,v) => { set(s=>({tasks:s.tasks.map(t=>t.id===i?{...t,...v}:t)})); persist(get); },
-  removeTask: i => { set(s=>({tasks:s.tasks.filter(t=>t.id!==i)})); persist(get); },
-  addTransaction: v => { set(s=>({transactions:[...s.transactions,{...v,id:id()}],wallets:s.wallets.map(w=>w.id===v.walletId?{...w,balance:w.balance+(v.type==="income"?v.amount:-v.amount)}:w)})); persist(get); },
-  updateTransaction: (i,v) => {
-    const old=get().transactions.find(x=>x.id===i); if(!old)return;
-    const next={...old,...v};
-    if (!Number.isFinite(next.amount) || next.amount <= 0 || !next.walletId) return;
-    set(s=>({
-      transactions:s.transactions.map(t=>t.id===i?next:t),
-      wallets:s.wallets.map(w=>{
-        let delta=0;
-        if(w.id===old.walletId) delta-=old.type==="income"?old.amount:-old.amount;
-        if(w.id===next.walletId) delta+=next.type==="income"?next.amount:-next.amount;
-        return delta?{...w,balance:w.balance+delta}:w;
-      })
-    }));
-    persist(get);
-  },
-  removeTransaction: i => {
-    const tx=get().transactions.find(x=>x.id===i); if(!tx)return;
-    set(s=>({transactions:s.transactions.filter(x=>x.id!==i),wallets:s.wallets.map(w=>w.id===tx.walletId?{...w,balance:w.balance+(tx.type==="income"?-tx.amount:tx.amount)}:w)})); persist(get);
-  },
-  addWallet: v => { set(s=>({wallets:[...s.wallets,{...v,id:id()}]})); persist(get); },
-  updateWallet: (i,v) => { set(s=>({wallets:s.wallets.map(w=>w.id===i?{...w,...v}:w)})); persist(get); },
-  removeWallet: i => {
-    if (get().transactions.some(t=>t.walletId===i)) return;
-    set(s=>({wallets:s.wallets.filter(w=>w.id!==i)}));
-    persist(get);
-  },
-  addCategory: v => { set(s=>({categories:[...s.categories,{...v,id:id()}]})); persist(get); },
-  addBudget: v => { set(s=>({budgets:[...s.budgets,{...v,id:id()}]})); persist(get); },
-  removeBudget: i => { set(s=>({budgets:s.budgets.filter(b=>b.id!==i)})); persist(get); },
-  addGoal: v => { set(s=>({goals:[...s.goals,{...v,id:id()}]})); persist(get); },
-  updateGoal: (i,v) => { set(s=>({goals:s.goals.map(g=>g.id===i?{...g,...v}:g)})); persist(get); },
-  removeGoal: i => { set(s=>({goals:s.goals.filter(g=>g.id!==i)})); persist(get); },
-  addXp: (amount,event) => { award(get,set,amount,event); persist(get); },
-  spendCoins: (amount) => {
-    if (!Number.isFinite(amount) || amount <= 0) return false;
-    if (get().gamification.coins < amount) return false;
-    set(s => ({ gamification: { ...s.gamification, coins: s.gamification.coins - amount } }));
-    persist(get);
-    return true;
-  },
-  resetData: () => { set({...initial, hydrated:true}); persist(get); }
-}));
-
-export { addDays };
+const initial:AppData={rewards:DEFAULT_REWARDS,habits:[{id:id(),name:"Выпить воду",category:"Здоровье",color:"#2481cc",createdAt:new Date().toISOString(),completions:[]},{id:id(),name:"Тренировка",category:"Спорт",color:"#8b5cf6",createdAt:new Date().toISOString(),completions:[]}],tasks:[],wallets:[{id:id(),name:"Основной",balance:0,currency:"₽"}],categories:[{id:id(),name:"Продукты",type:"expense",color:"#f97316"},{id:id(),name:"Транспорт",type:"expense",color:"#8b5cf6"},{id:id(),name:"Зарплата",type:"income",color:"#22c55e"}],transactions:[],budgets:[],goals:[],onboardingDone:false,premium:false,gamification:{...DEFAULT_GAMIFICATION},settings:{theme:"dark",remindersEnabled:true,weekStartsMonday:true,aiEnabled:true},reminderLog:{},aiHistory:[]};
+interface Store extends AppData{hydrated:boolean;telegramUser:TelegramProfile|null;hydrate:()=>Promise<void>;patch:(v:Partial<AppData>)=>void;addHabit:(v:Omit<Habit,"id"|"createdAt"|"completions">)=>void;updateHabit:(id:string,v:Partial<Habit>)=>void;toggleHabit:(id:string,date?:string)=>void;removeHabit:(id:string)=>void;addTask:(v:Omit<Task,"id"|"createdAt"|"completed">)=>void;toggleTask:(id:string)=>void;updateTask:(id:string,v:Partial<Task>)=>void;removeTask:(id:string)=>void;addTransaction:(v:Omit<Transaction,"id">)=>void;updateTransaction:(id:string,v:Partial<Transaction>)=>void;removeTransaction:(id:string)=>void;addWallet:(v:Omit<Wallet,"id">)=>void;updateWallet:(id:string,v:Partial<Wallet>)=>void;removeWallet:(id:string)=>void;addCategory:(v:Omit<Category,"id">)=>void;addBudget:(v:Omit<Budget,"id">)=>void;removeBudget:(id:string)=>void;addGoal:(v:Omit<SavingsGoal,"id">)=>void;updateGoal:(id:string,v:Partial<SavingsGoal>)=>void;removeGoal:(id:string)=>void;addXp:(amount:number,event?:string)=>void;spendCoins:(amount:number)=>boolean;claimChallenge:(id:string,amount:number)=>boolean;resetData:()=>void}
+const normalize=(d:AppData):AppData=>({...initial,...d,rewards:d.rewards??DEFAULT_REWARDS,gamification:{...DEFAULT_GAMIFICATION,...(d.gamification??{}),claimedChallenges:d.gamification?.claimedChallenges??[]},settings:{...initial.settings,...(d.settings??{})},reminderLog:d.reminderLog??{},aiHistory:d.aiHistory??[]});
+const persist=(get:()=>Store)=>{const s=get();const data:AppData={rewards:s.rewards,habits:s.habits,tasks:s.tasks,wallets:s.wallets,categories:s.categories,transactions:s.transactions,budgets:s.budgets,goals:s.goals,onboardingDone:s.onboardingDone,premium:s.premium,gamification:s.gamification,settings:s.settings,reminderLog:s.reminderLog,aiHistory:s.aiHistory};void saveEverywhere(data)};
+const award=(get:()=>Store,set:any,amount:number,event?:string)=>{const g=get().gamification;if(event&&g.events.includes(event))return false;let xp=g.xp+amount,coins=g.coins+Math.max(1,Math.round(amount/10));const events=event?[...g.events,event]:g.events;const achievements=[...g.achievements];const unlock=(x:string)=>{if(!achievements.includes(x))achievements.push(x)};if(xp>=100)unlock("hundred-xp");if(xp>=1000)unlock("thousand-xp");set({gamification:{...g,xp,coins,events,achievements}});return true};
+export const useStore=create<Store>((set,get)=>({...initial,hydrated:false,telegramUser:null,
+hydrate:async()=>{try{const local=loadLocal();const cloud=await Promise.race([loadCloud(),new Promise<null>(r=>setTimeout(()=>r(null),1200))]);const base=normalize(cloud??local??initial);try{const remote=await authenticate(base);if(remote){set({...normalize(remote.data),telegramUser:remote.user,hydrated:true});return}}catch{}try{const remote=await loadRemote();if(remote){set({...normalize(remote.data),telegramUser:remote.user,hydrated:true});return}}catch{}set({...base,hydrated:true})}catch{set({...normalize(loadLocal()??initial),hydrated:true})}},
+patch:v=>{set(v);persist(get)},
+addHabit:v=>{set(s=>({habits:[...s.habits,{...v,id:id(),createdAt:new Date().toISOString(),completions:[]}]}));persist(get)},
+updateHabit:(i,v)=>{set(s=>({habits:s.habits.map(h=>h.id===i?{...h,...v}:h)}));persist(get)},
+toggleHabit:(i,d=today())=>{const h=get().habits.find(x=>x.id===i);if(!h)return;const removing=h.completions.includes(d);set(s=>({habits:s.habits.map(x=>x.id===i?{...x,completions:removing?x.completions.filter(y=>y!==d):[...x.completions,d]}:x)}));if(!removing){award(get,set,10,`habit:${i}:${d}`);const all=get().habits.filter(x=>!x.archived).length>0&&get().habits.filter(x=>!x.archived).every(x=>x.completions.includes(d));if(all)award(get,set,50,`perfect:${d}`);if(!get().gamification.achievements.includes("first-habit")){award(get,set,50,"achievement:first-habit");const g=get().gamification;set({gamification:{...g,achievements:[...g.achievements,"first-habit"]}})}}persist(get)},
+removeHabit:i=>{set(s=>({habits:s.habits.filter(h=>h.id!==i)}));persist(get)},
+addTask:v=>{set(s=>({tasks:[...s.tasks,{...v,id:id(),createdAt:new Date().toISOString(),completed:false}]}));persist(get)},
+toggleTask:i=>{const t=get().tasks.find(x=>x.id===i);if(!t)return;const complete=!t.completed;set(s=>({tasks:s.tasks.map(x=>x.id===i?{...x,completed:complete}:x)}));if(complete)award(get,set,20,`task:${i}`);persist(get)},
+updateTask:(i,v)=>{set(s=>({tasks:s.tasks.map(t=>t.id===i?{...t,...v}:t)}));persist(get)},removeTask:i=>{set(s=>({tasks:s.tasks.filter(t=>t.id!==i)}));persist(get)},
+addTransaction:v=>{set(s=>({transactions:[...s.transactions,{...v,id:id()}],wallets:s.wallets.map(w=>w.id===v.walletId?{...w,balance:w.balance+(v.type==="income"?v.amount:-v.amount)}:w)}));award(get,set,5,"transaction:first");if(!get().gamification.achievements.includes("finance-first")){const g=get().gamification;set({gamification:{...g,achievements:[...g.achievements,"finance-first"]}})}persist(get)},
+updateTransaction:(i,v)=>{const old=get().transactions.find(x=>x.id===i);if(!old)return;const next={...old,...v};if(!Number.isFinite(next.amount)||next.amount<=0||!next.walletId)return;set(s=>({transactions:s.transactions.map(t=>t.id===i?next:t),wallets:s.wallets.map(w=>{let delta=0;if(w.id===old.walletId)delta-=old.type==="income"?old.amount:-old.amount;if(w.id===next.walletId)delta+=next.type==="income"?next.amount:-next.amount;return delta?{...w,balance:w.balance+delta}:w})}));persist(get)},
+removeTransaction:i=>{const tx=get().transactions.find(x=>x.id===i);if(!tx)return;set(s=>({transactions:s.transactions.filter(t=>t.id!==i),wallets:s.wallets.map(w=>w.id===tx.walletId?{...w,balance:w.balance+(tx.type==="income"?-tx.amount:tx.amount)}:w)}));persist(get)},
+addWallet:v=>{set(s=>({wallets:[...s.wallets,{...v,id:id()}]}));persist(get)},updateWallet:(i,v)=>{set(s=>({wallets:s.wallets.map(w=>w.id===i?{...w,...v}:w)}));persist(get)},removeWallet:i=>{if(get().transactions.some(t=>t.walletId===i))return;set(s=>({wallets:s.wallets.filter(w=>w.id!==i)}));persist(get)},
+addCategory:v=>{set(s=>({categories:[...s.categories,{...v,id:id()}]}));persist(get)},addBudget:v=>{set(s=>({budgets:[...s.budgets,{...v,id:id()}]}));persist(get)},removeBudget:i=>{set(s=>({budgets:s.budgets.filter(b=>b.id!==i)}));persist(get)},addGoal:v=>{set(s=>({goals:[...s.goals,{...v,id:id()}]}));if(!get().gamification.achievements.includes("goal-first")){award(get,set,75,"achievement:goal-first");const g=get().gamification;set({gamification:{...g,achievements:[...g.achievements,"goal-first"]}})}persist(get)},updateGoal:(i,v)=>{set(s=>({goals:s.goals.map(g=>g.id===i?{...g,...v}:g)}));persist(get)},removeGoal:i=>{set(s=>({goals:s.goals.filter(g=>g.id!==i)}));persist(get)},
+addXp:(n,e)=>{award(get,set,n,e);persist(get)},spendCoins:n=>{if(n<=0||get().gamification.coins<n)return false;set(s=>({gamification:{...s.gamification,coins:s.gamification.coins-n}}));persist(get);return true},claimChallenge:(challenge,amount)=>{const g=get().gamification;if((g.claimedChallenges??[]).includes(challenge))return false;if(g.coins<0)return false;const claimed=[...(g.claimedChallenges??[]),challenge];set({gamification:{...g,claimedChallenges:claimed,xp:g.xp+amount,coins:g.coins+Math.max(5,Math.round(amount/10))}});persist(get);return true},resetData:()=>{set({...initial,hydrated:true});persist(get)}}));
