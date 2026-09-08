@@ -19,7 +19,8 @@ export const pool = new Pool({
 
 export async function initDb() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE SCHEMA IF NOT EXISTS uphabit;
+    CREATE TABLE IF NOT EXISTS uphabit.users (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       telegram_id BIGINT UNIQUE NOT NULL,
       username TEXT,
@@ -32,14 +33,14 @@ export async function initDb() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users (telegram_id);
+    CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON uphabit.users (telegram_id);
   `);
 }
 
 export async function upsertUser(user: TelegramUser, defaultData: AppData) {
   const result = await pool.query(
     `
-      INSERT INTO users (
+      INSERT INTO uphabit.users (
         telegram_id, username, first_name, last_name, photo_url,
         language_code, telegram_premium, app_data
       )
@@ -71,13 +72,13 @@ export async function upsertUser(user: TelegramUser, defaultData: AppData) {
 }
 
 export async function getUserById(id: string) {
-  const result = await pool.query(`SELECT * FROM users WHERE id = $1`, [id]);
+  const result = await pool.query(`SELECT * FROM uphabit.users WHERE id = $1`, [id]);
   return result.rows[0] ?? null;
 }
 
 export async function updateUserData(id: string, data: AppData) {
   const result = await pool.query(
-    `UPDATE users SET app_data = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING app_data, updated_at`,
+    `UPDATE uphabit.users SET app_data = $2::jsonb, updated_at = NOW() WHERE id = $1 RETURNING app_data, updated_at`,
     [id, JSON.stringify(data)],
   );
   return result.rows[0] ?? null;
