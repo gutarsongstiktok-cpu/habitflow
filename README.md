@@ -1,56 +1,15 @@
-# HabitFlow
+# HabitFlow 2.0
 
-Telegram Mini App «Привычки + Задачи + Финансы».
+Telegram Mini App / PWA для привычек, задач и личных финансов.
 
-## Структура
+## Что включено
+- Привычки: создание, редактирование, удаление, streak, рекорд, календарь месяца, напоминание.
+- Задачи: приоритеты, дедлайны, фильтры, повторение.
+- Финансы: кошельки, доходы/расходы, категории, бюджеты, цели накопления.
+- Аналитика: streak, задачи, доходы/расходы, диаграмма расходов.
+- Профиль: JSON-экспорт, Premium-заглушка, сброс.
+- localStorage + Telegram CloudStorage с безопасным fallback.
+- Render-ready: `npm run build` и `npm run start`.
 
-```text
-HabitFlow/
-├── public/
-│   ├── icons/
-│   │   ├── icon-192.png
-│   │   └── icon-512.png
-│   ├── manifest.json
-│   └── favicon.svg
-├── src/
-│   ├── App.tsx
-│   ├── main.tsx
-│   ├── style.css
-│   ├── store.ts
-│   ├── storage.ts
-│   └── types.ts
-├── .env.example
-├── .gitignore
-├── index.html
-├── package.json
-├── postcss.config.js
-├── README.md
-├── tailwind.config.js
-├── tsconfig.app.json
-├── tsconfig.json
-└── vite.config.ts
-```
-
-## Запуск
-
-```bash
-npm install
-npm run dev
-```
-
-Production:
-
-```bash
-npm run build
-npm run preview
-```
-
-## Telegram
-
-Разместите `dist` на HTTPS-хостинге и укажите URL как Web App для Telegram-бота.
-
-Данные сохраняются в Telegram CloudStorage, если API доступен. В обычном браузере используется localStorage.
-
-## Безопасность
-
-Telegram Bot API token нельзя помещать во frontend. Реальные уведомления и Telegram Stars должны выполняться через backend/serverless-функцию.
+## Важно
+Telegram Bot API token нельзя хранить во frontend. Для реальных уведомлений, рефералов и Stars нужен backend/serverless слой.

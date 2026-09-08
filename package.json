@@ -1,12 +1,13 @@
 {
   "name": "habitflow",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
-  "dev": "vite",
-  "build": "tsc -b && vite build",
-  "start": "vite preview --host 0.0.0.0"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "start": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "@twa-dev/sdk": "^8.0.0",
