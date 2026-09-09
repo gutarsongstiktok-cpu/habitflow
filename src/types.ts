@@ -14,7 +14,7 @@ export interface Task {
 }
 export interface Wallet { id: string; name: string; balance: number; currency: string; }
 export interface Category { id: string; name: string; type: TransactionType; color: string; }
-export interface Transaction { id: string; type: TransactionType; amount: number; categoryId: string; walletId: string; comment?: string; date: string; }
+export interface Transaction { id: string; type: TransactionType; amount: number; categoryId: string; walletId: string; comment?: string; date: string; balanceApplied?: boolean; }
 export interface Budget { id: string; categoryId: string; month: string; limit: number; }
 export interface SavingsGoal { id: string; name: string; target: number; saved: number; deadline?: string; }
 export interface Gamification { xp: number; coins: number; achievements: string[]; events: string[]; claimedChallenges?: string[]; }
